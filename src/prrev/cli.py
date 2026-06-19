@@ -6,6 +6,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from prrev.config import load_config
 from prrev.formatter import print_review, to_markdown
 from prrev.git import get_diff
 from prrev.llm.anthropic import AnthropicProvider
@@ -33,6 +34,11 @@ def main(
         None, help="Exit non-zero if issues at this severity or above (critical, warning)"
     ),
 ) -> None:
+    # cli flags override config, config fills in defaults
+    cfg = load_config()
+    prov = provider or cfg.provider
+    mdl = model or cfg.model
+
     # github pr support comes later
     if _is_github_url(target):
         console.print("github PR review not implemented yet", style="red")
@@ -46,20 +52,19 @@ def main(
         raise typer.Exit(2)
 
     # pick provider, only anthropic for now
-    prov = provider or "anthropic"
     if prov != "anthropic":
         console.print(f"provider '{prov}' not implemented yet", style="red")
         raise typer.Exit(2)
 
     try:
-        llm = AnthropicProvider(model=model) if model else AnthropicProvider()
+        llm = AnthropicProvider(model=mdl, api_key=cfg.anthropic_api_key) if mdl else AnthropicProvider(api_key=cfg.anthropic_api_key)
     except ValueError as e:
         console.print(f"error: {e}", style="red")
         raise typer.Exit(2)
 
     # run the review
     try:
-        result = asyncio.run(review_diff(llm, diff))
+        result = asyncio.run(review_diff(llm, diff, max_items=cfg.max_items))
     except Exception as e:
         console.print(f"review failed: {e}", style="red")
         raise typer.Exit(2)
