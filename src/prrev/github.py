@@ -1,5 +1,4 @@
 # github api, fetch pr diffs and post review comments
-# post_review comes in a later commit
 
 import re
 from dataclasses import dataclass
@@ -57,6 +56,40 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
 
 
 async def post_review(
-    owner: str, repo: str, number: int, body: str, token: str
+    owner: str,
+    repo: str,
+    number: int,
+    body: str,
+    token: str,
+    items: list[dict] | None = None,
 ) -> None:
-    raise NotImplementedError
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+
+    # build inline comments from items that have file + line
+    comments = []
+    if items:
+        for item in items:
+            if item.get("file") and item.get("line"):
+                comments.append({
+                    "path": item["file"],
+                    "line": item["line"],
+                    "side": "RIGHT",
+                    "body": f"**{item['severity'].upper()}**: {item['summary']}\n\n{item['explanation']}",
+                })
+
+    payload: dict = {
+        "body": body,
+        "event": "COMMENT",
+    }
+    if comments:
+        payload["comments"] = comments
+
+    async with httpx.AsyncClient(base_url=API_BASE, headers=headers) as client:
+        resp = await client.post(
+            f"/repos/{owner}/{repo}/pulls/{number}/reviews",
+            json=payload,
+        )
+        resp.raise_for_status()

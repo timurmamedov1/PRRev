@@ -9,7 +9,7 @@ from rich.console import Console
 from prrev.config import load_config
 from prrev.formatter import print_review, to_markdown
 from prrev.git import get_diff
-from prrev.github import fetch_pr, parse_pr_url
+from prrev.github import fetch_pr, parse_pr_url, post_review
 from prrev.llm.anthropic import AnthropicProvider
 from prrev.reviewer import review_diff
 
@@ -90,7 +90,23 @@ def main(
         Path(output).write_text(to_markdown(result))
         console.print(f"\nreview written to {output}", style="dim")
 
-    # --post comes later with github integration
+    # post review as github pr comment
     if post:
-        console.print("--post not implemented yet", style="red")
-        raise typer.Exit(2)
+        if not _is_github_url(target):
+            console.print("error: --post only works with github PR urls", style="red")
+            raise typer.Exit(2)
+        if not cfg.github_token:
+            console.print("error: GITHUB_TOKEN not set", style="red")
+            raise typer.Exit(2)
+        try:
+            items_for_api = [
+                {"file": i.file, "line": i.line, "severity": i.severity,
+                 "summary": i.summary, "explanation": i.explanation}
+                for i in result.items
+            ]
+            body = to_markdown(result)
+            asyncio.run(post_review(owner, repo, number, body, cfg.github_token, items=items_for_api))
+            console.print("\nreview posted to PR", style="bold green")
+        except Exception as e:
+            console.print(f"failed to post review: {e}", style="red")
+            raise typer.Exit(2)
