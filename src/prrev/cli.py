@@ -9,6 +9,7 @@ from rich.console import Console
 from prrev.config import load_config
 from prrev.formatter import print_review, to_markdown
 from prrev.git import get_diff
+from prrev.github import fetch_pr, parse_pr_url
 from prrev.llm.anthropic import AnthropicProvider
 from prrev.reviewer import review_diff
 
@@ -39,17 +40,28 @@ def main(
     prov = provider or cfg.provider
     mdl = model or cfg.model
 
-    # github pr support comes later
+    # route based on target type
     if _is_github_url(target):
-        console.print("github PR review not implemented yet", style="red")
-        raise typer.Exit(2)
-
-    # local repo path
-    try:
-        diff = get_diff(target, commit=commit, range=range, staged=staged)
-    except ValueError as e:
-        console.print(f"error: {e}", style="red")
-        raise typer.Exit(2)
+        if not cfg.github_token:
+            console.print("error: GITHUB_TOKEN not set", style="red")
+            raise typer.Exit(2)
+        try:
+            owner, repo, number = parse_pr_url(target)
+            pr = asyncio.run(fetch_pr(owner, repo, number, cfg.github_token))
+            diff = pr.diff
+            console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold")
+        except ValueError as e:
+            console.print(f"error: {e}", style="red")
+            raise typer.Exit(2)
+        except Exception as e:
+            console.print(f"failed to fetch PR: {e}", style="red")
+            raise typer.Exit(2)
+    else:
+        try:
+            diff = get_diff(target, commit=commit, range=range, staged=staged)
+        except ValueError as e:
+            console.print(f"error: {e}", style="red")
+            raise typer.Exit(2)
 
     # pick provider, only anthropic for now
     if prov != "anthropic":
