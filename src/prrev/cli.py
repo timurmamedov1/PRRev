@@ -11,6 +11,7 @@ from prrev.formatter import print_review, to_markdown
 from prrev.git import get_diff
 from prrev.github import fetch_pr, parse_pr_url, post_review
 from prrev.llm.anthropic import AnthropicProvider
+from prrev.llm.openai import OpenAIProvider
 from prrev.reviewer import review_diff
 
 app = typer.Typer(add_completion=False)
@@ -63,13 +64,15 @@ def main(
             console.print(f"error: {e}", style="red")
             raise typer.Exit(2)
 
-    # pick provider, only anthropic for now
-    if prov != "anthropic":
-        console.print(f"provider '{prov}' not implemented yet", style="red")
-        raise typer.Exit(2)
-
+    # pick provider
     try:
-        llm = AnthropicProvider(model=mdl, api_key=cfg.anthropic_api_key) if mdl else AnthropicProvider(api_key=cfg.anthropic_api_key)
+        if prov == "openai":
+            llm = OpenAIProvider(model=mdl, api_key=cfg.openai_api_key) if mdl else OpenAIProvider(api_key=cfg.openai_api_key)
+        elif prov == "anthropic":
+            llm = AnthropicProvider(model=mdl, api_key=cfg.anthropic_api_key) if mdl else AnthropicProvider(api_key=cfg.anthropic_api_key)
+        else:
+            console.print(f"unknown provider: {prov}", style="red")
+            raise typer.Exit(2)
     except ValueError as e:
         console.print(f"error: {e}", style="red")
         raise typer.Exit(2)
