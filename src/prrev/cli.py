@@ -37,7 +37,8 @@ def main(
     ),
 ) -> None:
     # cli flags override config, config fills in defaults
-    cfg = load_config()
+    repo_path = target if not _is_github_url(target) else None
+    cfg = load_config(repo_path=repo_path)
     prov = provider or cfg.provider
     mdl = model or cfg.model
 
