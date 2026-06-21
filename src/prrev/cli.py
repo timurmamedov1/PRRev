@@ -33,9 +33,15 @@ def main(
     post: bool = typer.Option(False, help="Post review as GitHub PR comment"),
     output: str | None = typer.Option(None, help="Write review to markdown file"),
     fail_on: str | None = typer.Option(
-        None, help="Exit non-zero if issues at this severity or above (critical, warning)"
+        None, help="Exit 1 if issues at this severity or above (critical, warning, suggestion)"
     ),
 ) -> None:
+    # validate --fail-on early
+    valid_severities = {"critical", "warning", "suggestion"}
+    if fail_on and fail_on not in valid_severities:
+        console.print(f"error: --fail-on must be one of: {', '.join(valid_severities)}", style="red")
+        raise typer.Exit(2)
+
     # cli flags override config, config fills in defaults
     repo_path = target if not _is_github_url(target) else None
     cfg = load_config(repo_path=repo_path)
@@ -114,3 +120,11 @@ def main(
         except Exception as e:
             console.print(f"failed to post review: {e}", style="red")
             raise typer.Exit(2)
+
+    # exit code based on --fail-on threshold
+    if fail_on and result.items:
+        # severity levels, lower number = more severe
+        severity_rank = {"critical": 0, "warning": 1, "suggestion": 2}
+        threshold = severity_rank[fail_on]
+        if any(severity_rank.get(i.severity, 2) <= threshold for i in result.items):
+            raise typer.Exit(1)
