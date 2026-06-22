@@ -18,6 +18,13 @@ class ReviewResult:
 
 
 class LLMProvider(ABC):
+    # max input tokens the model can handle, subclasses override
+    max_input_tokens: int = 100_000
+
     @abstractmethod
     async def review(self, diff: str) -> ReviewResult:
+        ...
+
+    @abstractmethod
+    def count_tokens(self, text: str) -> int:
         ...

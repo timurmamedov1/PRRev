@@ -4,6 +4,7 @@ import json
 import os
 
 import openai
+import tiktoken
 
 from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
 
@@ -63,12 +64,21 @@ SYSTEM_PROMPT = (
 
 
 class OpenAIProvider(LLMProvider):
+    max_input_tokens = 110_000  # gpt-4o is 128k, leave room for output
+
     def __init__(self, model: str = "gpt-4o", api_key: str | None = None):
         self.model = model
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise ValueError("OPENAI_API_KEY not set")
         self.client = openai.AsyncOpenAI(api_key=key)
+
+    def count_tokens(self, text: str) -> int:
+        try:
+            enc = tiktoken.encoding_for_model(self.model)
+        except KeyError:
+            enc = tiktoken.get_encoding("cl100k_base")
+        return len(enc.encode(text))
 
     async def review(self, diff: str) -> ReviewResult:
         response = await self.client.chat.completions.create(

@@ -1,16 +1,17 @@
 # orchestrator, takes diff + provider, returns structured review
-# chunking comes later, this is single pass for now
+# auto-chunks when diff exceeds 80% of the providers context window
 
 import asyncio
 
 from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
 
-# split delimiter in unified diffs
 DIFF_HEADER = "diff --git "
+
+# chunk when diff uses more than 80% of the providers max input tokens
+CHUNK_THRESHOLD = 0.8
 
 
 def _split_by_file(diff: str) -> list[str]:
-    # splits a multi-file diff into per-file chunks
     chunks = []
     current: list[str] = []
 
@@ -31,23 +32,50 @@ async def review_diff(
     diff: str,
     *,
     max_items: int = 20,
-    chunk: bool = False,
 ) -> ReviewResult:
     if not diff.strip():
         raise ValueError("empty diff")
 
-    if not chunk:
+    # check if we need to chunk based on token count
+    token_count = provider.count_tokens(diff)
+    threshold = int(provider.max_input_tokens * CHUNK_THRESHOLD)
+
+    if token_count <= threshold:
         result = await provider.review(diff)
         return _truncate(result, max_items)
 
-    # chunked mode, review each file in parallel
+    # diff is too big, split by file and review in parallel
     file_diffs = _split_by_file(diff)
     if len(file_diffs) <= 1:
+        # single file thats too big, just send it and hope for the best.
+        # TODO: split within file by hunk
         result = await provider.review(diff)
         return _truncate(result, max_items)
 
-    results = await asyncio.gather(*[provider.review(d) for d in file_diffs])
-    merged = _merge_results(results)
+    # skip files that individually exceed the threshold
+    reviewable = []
+    skipped_files = []
+    for chunk in file_diffs:
+        if provider.count_tokens(chunk) > threshold:
+            # grab filename from the diff header for the warning
+            first_line = chunk.split("\n", 1)[0]
+            skipped_files.append(first_line)
+        else:
+            reviewable.append(chunk)
+
+    results = await asyncio.gather(*[provider.review(d) for d in reviewable])
+    merged = _merge_results(list(results))
+
+    # add warnings for skipped files
+    for skipped in skipped_files:
+        merged.items.append(ReviewItem(
+            severity="warning",
+            file=skipped,
+            line=None,
+            summary="file skipped, too large for context window",
+            explanation="this files diff exceeded the models token limit and was not reviewed.",
+        ))
+
     return _truncate(merged, max_items)
 
 
