@@ -1,7 +1,6 @@
 # anthropic provider, uses tool use for structured output so we
 # dont have to parse json from raw text
 
-import json
 import os
 
 import anthropic
