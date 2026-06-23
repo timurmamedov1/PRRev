@@ -4,6 +4,7 @@ dynamic = ["version"]
 description = "CLI tool that reviews code diffs using LLMs"
 readme = "README.md"
 license = "MIT"
+authors = [{ name = "Timur Mamedov", email = "tm412421@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
     "typer>=0.12",

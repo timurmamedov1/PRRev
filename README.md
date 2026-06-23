@@ -5,9 +5,7 @@ A CLI tool that reviews code diffs using LLMs. Point it at a local repo or a Git
 ## Install
 
 ```bash
-git clone https://github.com/timurmamedov1/PRRev.git
-cd PRRev
-pip install -e .
+pip install prrev
 ```
 
 Requires Python 3.10+.
