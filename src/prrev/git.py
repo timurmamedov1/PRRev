@@ -26,7 +26,8 @@ def get_diff(
         if commit_obj.parents:
             return repo.git.diff(commit_obj.parents[0].hexsha, commit_obj.hexsha)
         # root commit, diff against empty tree
-        return repo.git.diff("4b825dc642cb6eb9a060e54bf899d69f82cf7113", commit_obj.hexsha)
+        empty_tree = repo.git.hash_object("-t", "tree", "/dev/null")
+        return repo.git.diff(empty_tree, commit_obj.hexsha)
 
     # commit range like abc123..def456
     if range:
