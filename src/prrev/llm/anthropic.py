@@ -73,9 +73,12 @@ class AnthropicProvider(LLMProvider):
         self.client = anthropic.AsyncAnthropic(api_key=key)
 
     def count_tokens(self, text: str) -> int:
-        # synchronous token counting using the anthropic sdk
         sync_client = anthropic.Anthropic(api_key=self.client.api_key)
-        return sync_client.count_tokens(text)
+        result = sync_client.messages.count_tokens(
+            model=self.model,
+            messages=[{"role": "user", "content": text}],
+        )
+        return result.input_tokens
 
     async def review(self, diff: str) -> ReviewResult:
         response = await self.client.messages.create(
