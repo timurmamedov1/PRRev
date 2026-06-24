@@ -43,9 +43,9 @@ prrev . --fail-on warning
 Set API keys as environment variables:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
-export OPENAI_API_KEY=sk-...
-export GITHUB_TOKEN=ghp_...
+export ANTHROPIC_API_KEY=YOUR_ANTHROPIC_KEY
+export OPENAI_API_KEY=YOUR_OPENAI_KEY
+export GITHUB_TOKEN=YOUR_GITHUB_TOKEN
 ```
 
 Or use a config file at `~/.config/prrev/config.toml`:
@@ -53,11 +53,11 @@ Or use a config file at `~/.config/prrev/config.toml`:
 ```toml
 [llm]
 provider = "anthropic"
-model = "claude-sonnet-4-20250514"
-anthropic_api_key = "sk-..."
+model = "claude-haiku-4-5"
+anthropic_api_key = "YOUR_ANTHROPIC_KEY"
 
 [github]
-token = "ghp_..."
+token = "YOUR_GITHUB_TOKEN"
 
 [review]
 max_items = 20
@@ -77,8 +77,30 @@ prrev . --provider anthropic
 prrev . --provider openai
 
 # override the model
-prrev . --provider anthropic --model claude-sonnet-4-20250514
+prrev . --provider anthropic --model claude-opus-4-8
 ```
+
+### Models you can use
+
+**Anthropic:**
+
+| Model | ID |
+|---|---|
+| Claude Opus 4.8 | `claude-opus-4-8` |
+| Claude Opus 4.7 | `claude-opus-4-7` |
+| Claude Opus 4.6 | `claude-opus-4-6` |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` (default) |
+| Claude Haiku 4.5 | `claude-haiku-4-5` |
+
+**OpenAI:**
+
+| Model | ID |
+|---|---|
+| GPT-4o | `gpt-4o` (default) |
+| GPT-4o mini | `gpt-4o-mini` |
+| GPT-4 Turbo | `gpt-4-turbo` |
+| o1 | `o1` |
+| o1-mini | `o1-mini` |
 
 ## How It Works
 
