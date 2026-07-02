@@ -22,6 +22,9 @@ def get_diff(
 
     # specific commit, show its diff against parent
     if commit:
+        # reject dash-prefixed values, git would treat them as options
+        if commit.startswith("-"):
+            raise ValueError(f"invalid commit: {commit}")
         commit_obj = repo.commit(commit)
         if commit_obj.parents:
             return repo.git.diff(commit_obj.parents[0].hexsha, commit_obj.hexsha)
@@ -29,11 +32,13 @@ def get_diff(
         empty_tree = repo.git.hash_object("-t", "tree", "/dev/null")
         return repo.git.diff(empty_tree, commit_obj.hexsha)
 
-    # commit range like abc123..def456
+    # commit range like abc123..def456. reject dash-prefixed values and pass
+    # --end-of-options so git cant interpret the range as a flag like
+    # --output=/some/path which would overwrite arbitrary files
     if range:
-        if ".." not in range:
+        if range.startswith("-") or ".." not in range:
             raise ValueError(f"invalid range format, expected 'a..b': {range}")
-        return repo.git.diff(range)
+        return repo.git.diff("--end-of-options", range)
 
     # staged only
     if staged:
