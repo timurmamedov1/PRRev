@@ -57,7 +57,9 @@ def main(
             owner, repo, number = parse_pr_url(target)
             pr = asyncio.run(fetch_pr(owner, repo, number, cfg.github_token))
             diff = pr.diff
-            console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold")
+            # pr.title is attacker controlled, rich parses [tags] and would
+            # raise MarkupError on something like "Fix the [/x] parser"
+            console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold", markup=False)
         except ValueError as e:
             console.print(f"error: {e}", style="red")
             raise typer.Exit(2)

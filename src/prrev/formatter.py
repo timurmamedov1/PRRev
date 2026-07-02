@@ -47,8 +47,9 @@ def print_review(result: ReviewResult, file_count: int = 0) -> None:
         for item in result.items:
             console.print(_format_item(item))
 
-    # summary at the bottom
-    console.print(Panel(result.summary, title="Summary", border_style="dim"))
+    # summary at the bottom. wrap in Text bc the summary comes from the llm
+    # and a stray [/tag] would raise MarkupError from the panel renderer
+    console.print(Panel(Text(result.summary), title="Summary", border_style="dim"))
 
 
 def to_markdown(result: ReviewResult) -> str:

@@ -112,3 +112,16 @@ class TestGitHubUrl:
         result = runner.invoke(app, ["https://github.com/user/repo/pull/1"])
         assert result.exit_code == 2
         assert "GITHUB_TOKEN" in result.output
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.fetch_pr", new_callable=AsyncMock)
+    @patch("prrev.cli.load_config")
+    def test_markup_in_pr_title_does_not_crash(self, mock_config, mock_fetch, mock_review):
+        # pr title is attacker controlled, a bracket-tag-shaped title used to
+        # crash the rich print with MarkupError before the review even ran
+        mock_config.return_value = _mock_config(github_token="tok")
+        pr = MagicMock(number=12, title="Fix the [/x] parser", diff="diff --git a/x b/x\n")
+        mock_fetch.return_value = pr
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["https://github.com/user/repo/pull/12"])
+        assert result.exit_code == 0, result.exception

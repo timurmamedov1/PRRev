@@ -1,6 +1,11 @@
 # tests for markdown and rich formatter output
 
-from prrev.formatter import to_markdown, _format_item
+import io
+
+from rich.console import Console
+
+from prrev import formatter as fmt
+from prrev.formatter import to_markdown, _format_item, print_review
 from prrev.llm.base import ReviewItem, ReviewResult
 
 
@@ -91,3 +96,12 @@ class TestFormatItem:
         plain = text.plain
         assert "something wrong" in plain
         assert "here is why" in plain
+
+
+class TestPrintReviewMarkupSafety:
+    def test_summary_with_markup_like_text_does_not_raise(self, monkeypatch):
+        # llm-produced summary can contain [/tag]-shaped substrings that
+        # rich would try to parse as markup and raise MarkupError on
+        monkeypatch.setattr(fmt, "console", Console(file=io.StringIO(), force_terminal=True))
+        result = ReviewResult(items=[], summary="Removed the [/tool] wrapper")
+        print_review(result)
