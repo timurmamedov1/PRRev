@@ -4,7 +4,32 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+from prrev import config as config_mod
 from prrev.config import Config, load_config, _apply_toml
+
+
+# vars load_config reads from the env, cleared before each test so the
+# developers real shell env (a live GITHUB_TOKEN etc) cant leak into asserts
+_CONFIG_ENV_VARS = (
+    "PRREV_PROVIDER",
+    "PRREV_MODEL",
+    "PRREV_MAX_ITEMS",
+    "GITHUB_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_config(tmp_path, monkeypatch):
+    # clean env every test, otherwise a real GITHUB_TOKEN in the shell overrides
+    # repo config and masks the token-blocking guarantee were trying to verify
+    for var in _CONFIG_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    # dont read the real ~/.config/prrev/config.toml, it may hold live tokens
+    monkeypatch.setattr(config_mod, "GLOBAL_CONFIG_PATH", tmp_path / "no-global.toml")
 
 
 class TestDefaults:
@@ -106,7 +131,15 @@ class TestLoadConfig:
         assert cfg.provider == "openai"
 
     def test_repo_toml_blocks_tokens(self, tmp_path):
+        # security guarantee: repo config can never inject any token, even if
+        # someone drops a malicious .prrev.toml into a repo you clone
         toml_file = tmp_path / ".prrev.toml"
-        toml_file.write_text('[github]\ntoken = "ghp_leaked"\n')
+        toml_file.write_text(
+            '[github]\ntoken = "ghp_leaked"\n'
+            '[llm]\nanthropic_api_key = "sk-ant-leaked"\n'
+            'openai_api_key = "sk-oai-leaked"\n'
+        )
         cfg = load_config(repo_path=str(tmp_path))
         assert cfg.github_token is None
+        assert cfg.anthropic_api_key is None
+        assert cfg.openai_api_key is None
