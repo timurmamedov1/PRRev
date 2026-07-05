@@ -93,7 +93,15 @@ class OpenAIProvider(LLMProvider):
             },
         )
 
-        data = json.loads(response.choices[0].message.content)
+        choice = response.choices[0]
+        if choice.finish_reason != "stop":
+            raise RuntimeError(f"review failed: finish_reason={choice.finish_reason}")
+
+        content = choice.message.content
+        if not content:
+            raise RuntimeError("review failed: empty response from model")
+
+        data = json.loads(content)
         items = [
             ReviewItem(
                 severity=item["severity"],

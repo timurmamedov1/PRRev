@@ -44,6 +44,7 @@ class TestAnthropicProvider:
 
         mock_response = MagicMock()
         mock_response.content = [tool_block]
+        mock_response.stop_reason = "tool_use"
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
@@ -63,10 +64,24 @@ class TestAnthropicProvider:
 
         mock_response = MagicMock()
         mock_response.content = [text_block]
+        mock_response.stop_reason = "end_turn"
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
         with pytest.raises(RuntimeError, match="model did not call submit_review"):
+            await provider.review("diff content")
+
+    @pytest.mark.asyncio
+    async def test_truncated_response_raises(self):
+        provider = AnthropicProvider(api_key="sk-test-123")
+
+        mock_response = MagicMock()
+        mock_response.content = []
+        mock_response.stop_reason = "max_tokens"
+
+        provider.client.messages.create = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(RuntimeError, match="stop_reason=max_tokens"):
             await provider.review("diff content")
 
     @pytest.mark.asyncio
@@ -80,6 +95,7 @@ class TestAnthropicProvider:
 
         mock_response = MagicMock()
         mock_response.content = [tool_block]
+        mock_response.stop_reason = "tool_use"
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
@@ -107,6 +123,7 @@ class TestOpenAIProvider:
 
         mock_choice = MagicMock()
         mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
 
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]
@@ -120,6 +137,40 @@ class TestOpenAIProvider:
         assert result.items[0].file == "app.py"
 
     @pytest.mark.asyncio
+    async def test_truncated_response_raises(self):
+        provider = OpenAIProvider(api_key="sk-test-123")
+
+        mock_choice = MagicMock()
+        mock_choice.finish_reason = "length"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(RuntimeError, match="finish_reason=length"):
+            await provider.review("diff content")
+
+    @pytest.mark.asyncio
+    async def test_empty_content_raises(self):
+        provider = OpenAIProvider(api_key="sk-test-123")
+
+        mock_message = MagicMock()
+        mock_message.content = None
+
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(RuntimeError, match="empty response"):
+            await provider.review("diff content")
+
+    @pytest.mark.asyncio
     async def test_empty_items(self):
         provider = OpenAIProvider(api_key="sk-test-123")
 
@@ -128,6 +179,7 @@ class TestOpenAIProvider:
 
         mock_choice = MagicMock()
         mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
 
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]

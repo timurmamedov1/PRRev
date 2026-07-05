@@ -93,7 +93,9 @@ class AnthropicProvider(LLMProvider):
             messages=[{"role": "user", "content": diff}],
         )
 
-        # find the tool use block in the response
+        if response.stop_reason not in ("tool_use", "end_turn"):
+            raise RuntimeError(f"review failed: stop_reason={response.stop_reason}")
+
         for block in response.content:
             if block.type == "tool_use" and block.name == "submit_review":
                 data = block.input
