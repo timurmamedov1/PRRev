@@ -1,7 +1,27 @@
 # tests for reviewer truncation and merging
 
-from prrev.llm.base import ReviewItem, ReviewResult
-from prrev.reviewer import _truncate, _merge_results
+import pytest
+
+from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
+from prrev.reviewer import _truncate, _merge_results, review_diff
+
+
+class FakeProvider(LLMProvider):
+    # in-memory provider that tracks call counts, so we can prove the
+    # byte-length shortcut avoids the count_tokens network round-trip
+    def __init__(self, *, max_tokens=100_000, token_count=50):
+        self.max_input_tokens = max_tokens
+        self._token_count = token_count
+        self.count_tokens_calls = 0
+        self.review_calls = 0
+
+    def count_tokens(self, text: str) -> int:
+        self.count_tokens_calls += 1
+        return self._token_count
+
+    async def review(self, diff: str) -> ReviewResult:
+        self.review_calls += 1
+        return ReviewResult(items=[], summary="ok")
 
 
 def _item(severity="suggestion", file="test.py", line=1):
@@ -89,3 +109,27 @@ class TestMergeResults:
         r2 = ReviewResult(items=[], summary="actual summary")
         merged = _merge_results([r1, r2])
         assert merged.summary == "actual summary"
+
+
+class TestReviewDiff:
+    async def test_small_diff_skips_count_tokens(self):
+        # perf fix: byte-length shortcut skips the api round-trip for
+        # anything that clearly fits under the threshold
+        provider = FakeProvider(max_tokens=100_000)
+        diff = "diff --git a/x b/x\n+hello\n"
+        await review_diff(provider, diff)
+        assert provider.count_tokens_calls == 0
+        assert provider.review_calls == 1
+
+    async def test_empty_diff_raises(self):
+        provider = FakeProvider()
+        with pytest.raises(ValueError, match="empty diff"):
+            await review_diff(provider, "")
+
+    async def test_large_diff_falls_back_to_real_count(self):
+        # byte-length exceeds threshold so we still call the real api to
+        # decide, this covers the near-boundary path
+        provider = FakeProvider(max_tokens=100, token_count=50)  # threshold=80
+        big_diff = "diff --git a/x b/x\n" + "+padding line\n" * 100
+        await review_diff(provider, big_diff)
+        assert provider.count_tokens_calls >= 1

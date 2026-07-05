@@ -11,6 +11,10 @@ DIFF_HEADER = "diff --git "
 CHUNK_THRESHOLD = 0.8
 
 
+def _byte_len(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
 def _split_by_file(diff: str) -> list[str]:
     chunks = []
     current: list[str] = []
@@ -36,11 +40,13 @@ async def review_diff(
     if not diff.strip():
         raise ValueError("empty diff")
 
-    # check if we need to chunk based on token count
-    token_count = provider.count_tokens(diff)
     threshold = int(provider.max_input_tokens * CHUNK_THRESHOLD)
 
-    if token_count <= threshold:
+    # utf-8 byte count is a safe upper bound on tokens bc tokenizers use
+    # byte-level bpe, no token encodes less than 1 byte. when the diff
+    # clearly fits we can skip the count_tokens call, which for anthropic
+    # is a blocking network round-trip on every review
+    if _byte_len(diff) <= threshold or provider.count_tokens(diff) <= threshold:
         result = await provider.review(diff)
         return _truncate(result, max_items)
 
@@ -52,11 +58,12 @@ async def review_diff(
         result = await provider.review(diff)
         return _truncate(result, max_items)
 
-    # skip files that individually exceed the threshold
+    # skip files that individually exceed the threshold, same byte-length
+    # shortcut so we dont call count_tokens for every small chunk
     reviewable = []
     skipped_files = []
     for chunk in file_diffs:
-        if provider.count_tokens(chunk) > threshold:
+        if _byte_len(chunk) > threshold and provider.count_tokens(chunk) > threshold:
             # grab filename from the diff header for the warning
             first_line = chunk.split("\n", 1)[0]
             skipped_files.append(first_line)
