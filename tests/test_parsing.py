@@ -1,8 +1,11 @@
-# tests for url parsing, diff splitting, and github url detection
+# tests for url parsing, diff splitting, github url detection, and review posting
 
+from unittest.mock import AsyncMock, patch
+
+import httpx
 import pytest
 
-from prrev.github import parse_pr_url
+from prrev.github import parse_pr_url, post_review
 from prrev.reviewer import _split_by_file
 from prrev.cli import _is_github_url
 
@@ -90,3 +93,64 @@ class TestIsGithubUrl:
 
     def test_other_host(self):
         assert _is_github_url("https://gitlab.com/user/repo/pull/1") is False
+
+
+class TestPostReview:
+    async def test_inline_comments_posted(self):
+        items = [{"file": "app.py", "line": 10, "severity": "warning",
+                  "summary": "unused import", "explanation": "os is unused"}]
+
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = lambda: None
+
+        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+            ctx = AsyncMock()
+            ctx.post = AsyncMock(return_value=mock_resp)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await post_review("o", "r", 1, "body", "tok", items=items)
+            payload = ctx.post.call_args[1]["json"]
+            assert len(payload["comments"]) == 1
+            assert payload["comments"][0]["path"] == "app.py"
+
+    async def test_422_falls_back_to_body(self):
+        items = [{"file": "app.py", "line": 999, "severity": "warning",
+                  "summary": "bad line", "explanation": "not in diff"}]
+
+        rejected = AsyncMock()
+        rejected.status_code = 422
+
+        ok = AsyncMock()
+        ok.status_code = 200
+        ok.raise_for_status = lambda: None
+
+        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+            ctx = AsyncMock()
+            ctx.post = AsyncMock(side_effect=[rejected, ok])
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await post_review("o", "r", 1, "body", "tok", items=items)
+            assert ctx.post.call_count == 2
+            fallback_payload = ctx.post.call_args_list[1][1]["json"]
+            assert "comments" not in fallback_payload
+            assert "app.py:999" in fallback_payload["body"]
+
+    async def test_no_fallback_without_comments(self):
+        # 422 without comments shouldnt retry, just raise
+        rejected = AsyncMock()
+        rejected.status_code = 422
+        rejected.raise_for_status = lambda: (_ for _ in ()).throw(
+            httpx.HTTPStatusError("422", request=httpx.Request("POST", "http://x"), response=httpx.Response(422))
+        )
+
+        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+            ctx = AsyncMock()
+            ctx.post = AsyncMock(return_value=rejected)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await post_review("o", "r", 1, "body", "tok", items=None)

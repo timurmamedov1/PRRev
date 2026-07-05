@@ -92,4 +92,21 @@ async def post_review(
             f"/repos/{owner}/{repo}/pulls/{number}/reviews",
             json=payload,
         )
+
+        # github rejects the whole review if any inline comment targets a
+        # line thats not in the diff. fall back to posting everything in
+        # the body so the review still goes through
+        if resp.status_code == 422 and comments:
+            fallback_lines = [body, "\n---\n"]
+            for c in comments:
+                fallback_lines.append(f"**{c['path']}:{c['line']}** — {c['body']}\n")
+            payload = {
+                "body": "\n".join(fallback_lines),
+                "event": "COMMENT",
+            }
+            resp = await client.post(
+                f"/repos/{owner}/{repo}/pulls/{number}/reviews",
+                json=payload,
+            )
+
         resp.raise_for_status()
