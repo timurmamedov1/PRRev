@@ -71,10 +71,12 @@ class AnthropicProvider(LLMProvider):
         if not key:
             raise ValueError("ANTHROPIC_API_KEY not set")
         self.client = anthropic.AsyncAnthropic(api_key=key)
+        # sync client for count_tokens, reused across calls so we dont
+        # spin up a new http connection pool every time
+        self._sync_client = anthropic.Anthropic(api_key=key)
 
     def count_tokens(self, text: str) -> int:
-        sync_client = anthropic.Anthropic(api_key=self.client.api_key)
-        result = sync_client.messages.count_tokens(
+        result = self._sync_client.messages.count_tokens(
             model=self.model,
             messages=[{"role": "user", "content": text}],
         )
