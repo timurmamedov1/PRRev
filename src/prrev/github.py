@@ -76,7 +76,7 @@ async def post_review(
                 comments.append({
                     "path": item["file"],
                     "line": item["line"],
-                    "side": "RIGHT",
+                    "side": item.get("side", "RIGHT"),
                     "body": f"**{item['severity'].upper()}**: {item['summary']}\n\n{item['explanation']}",
                 })
 

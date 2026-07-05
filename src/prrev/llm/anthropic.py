@@ -44,6 +44,11 @@ REVIEW_TOOL = {
                             "type": "string",
                             "description": "1-3 sentence explanation",
                         },
+                        "side": {
+                            "type": "string",
+                            "enum": ["RIGHT", "LEFT"],
+                            "description": "RIGHT for additions/modified lines, LEFT for deletions",
+                        },
                     },
                     "required": ["severity", "file", "line", "summary", "explanation"],
                 },
@@ -106,6 +111,7 @@ class AnthropicProvider(LLMProvider):
                         line=item.get("line"),
                         summary=item["summary"],
                         explanation=item["explanation"],
+                        side=item.get("side", "RIGHT"),
                     )
                     for item in data.get("items", [])
                 ]

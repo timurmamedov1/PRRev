@@ -138,6 +138,25 @@ class TestPostReview:
             assert "comments" not in fallback_payload
             assert "app.py:999" in fallback_payload["body"]
 
+    async def test_deletion_comment_uses_left_side(self):
+        items = [{"file": "app.py", "line": 5, "severity": "warning",
+                  "summary": "removed guard", "explanation": "was needed",
+                  "side": "LEFT"}]
+
+        mock_resp = AsyncMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = lambda: None
+
+        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+            ctx = AsyncMock()
+            ctx.post = AsyncMock(return_value=mock_resp)
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await post_review("o", "r", 1, "body", "tok", items=items)
+            payload = ctx.post.call_args[1]["json"]
+            assert payload["comments"][0]["side"] == "LEFT"
+
     async def test_no_fallback_without_comments(self):
         # 422 without comments shouldnt retry, just raise
         rejected = AsyncMock()

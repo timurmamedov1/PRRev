@@ -9,6 +9,7 @@ class ReviewItem:
     line: int | None  # new-file line number (right side of diff)
     summary: str
     explanation: str
+    side: str = "RIGHT"  # RIGHT for additions, LEFT for deletions
 
 
 @dataclass

@@ -113,7 +113,8 @@ def main(
         try:
             items_for_api = [
                 {"file": i.file, "line": i.line, "severity": i.severity,
-                 "summary": i.summary, "explanation": i.explanation}
+                 "summary": i.summary, "explanation": i.explanation,
+                 "side": i.side}
                 for i in result.items
             ]
             body = to_markdown(result)
