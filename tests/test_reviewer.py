@@ -126,6 +126,16 @@ class TestReviewDiff:
         with pytest.raises(ValueError, match="empty diff"):
             await review_diff(provider, "")
 
+    async def test_zero_max_items_raises(self):
+        provider = FakeProvider()
+        with pytest.raises(ValueError, match="max_items must be positive"):
+            await review_diff(provider, "diff --git a/x b/x\n+hi\n", max_items=0)
+
+    async def test_negative_max_items_raises(self):
+        provider = FakeProvider()
+        with pytest.raises(ValueError, match="max_items must be positive"):
+            await review_diff(provider, "diff --git a/x b/x\n+hi\n", max_items=-1)
+
     async def test_large_diff_falls_back_to_real_count(self):
         # byte-length exceeds threshold so we still call the real api to
         # decide, this covers the near-boundary path

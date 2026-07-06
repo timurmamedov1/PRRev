@@ -37,6 +37,9 @@ async def review_diff(
     *,
     max_items: int = 20,
 ) -> ReviewResult:
+    if max_items < 1:
+        raise ValueError(f"max_items must be positive, got {max_items}")
+
     if not diff.strip():
         raise ValueError("empty diff")
 
