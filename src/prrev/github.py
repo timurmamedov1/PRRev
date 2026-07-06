@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import httpx
 
 API_BASE = "https://api.github.com"
+REQUEST_TIMEOUT = 30.0
 
 # matches urls like https://github.com/owner/repo/pull/42
 PR_URL_PATTERN = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
@@ -33,7 +34,7 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
         "Accept": "application/json",
     }
 
-    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True, timeout=REQUEST_TIMEOUT) as client:
         # get pr metadata
         resp = await client.get(f"/repos/{owner}/{repo}/pulls/{number}")
         resp.raise_for_status()
@@ -87,7 +88,7 @@ async def post_review(
     if comments:
         payload["comments"] = comments
 
-    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True, timeout=REQUEST_TIMEOUT) as client:
         resp = await client.post(
             f"/repos/{owner}/{repo}/pulls/{number}/reviews",
             json=payload,
