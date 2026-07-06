@@ -7,7 +7,7 @@ def get_diff(
     repo_path: str,
     *,
     commit: str | None = None,
-    range: str | None = None,
+    commit_range: str | None = None,
     staged: bool = False,
 ) -> str:
     try:
@@ -35,10 +35,10 @@ def get_diff(
     # commit range like abc123..def456. reject dash-prefixed values and pass
     # --end-of-options so git cant interpret the range as a flag like
     # --output=/some/path which would overwrite arbitrary files
-    if range:
-        if range.startswith("-") or ".." not in range:
-            raise ValueError(f"invalid range format, expected 'a..b': {range}")
-        return repo.git.diff("--end-of-options", range)
+    if commit_range:
+        if commit_range.startswith("-") or ".." not in commit_range:
+            raise ValueError(f"invalid range format, expected 'a..b': {commit_range}")
+        return repo.git.diff("--end-of-options", commit_range)
 
     # staged only
     if staged:

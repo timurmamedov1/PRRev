@@ -26,7 +26,7 @@ def _is_github_url(target: str) -> bool:
 def main(
     target: str = typer.Argument(..., help="Local repo path or GitHub PR URL"),
     commit: str | None = typer.Option(None, help="Review a specific commit"),
-    range: str | None = typer.Option(None, help="Review a commit range (abc..def)"),
+    commit_range: str | None = typer.Option(None, "--range", help="Review a commit range (abc..def)"),
     staged: bool = typer.Option(False, help="Review only staged changes"),
     provider: str | None = typer.Option(None, help="LLM provider: anthropic or openai"),
     model: str | None = typer.Option(None, help="Model override"),
@@ -68,7 +68,7 @@ def main(
             raise typer.Exit(2)
     else:
         try:
-            diff = get_diff(target, commit=commit, range=range, staged=staged)
+            diff = get_diff(target, commit=commit, commit_range=commit_range, staged=staged)
         except ValueError as e:
             console.print(f"error: {e}", style="red")
             raise typer.Exit(2)
@@ -99,7 +99,11 @@ def main(
 
     # markdown output
     if output:
-        Path(output).write_text(to_markdown(result))
+        out_path = Path(output).resolve()
+        if not out_path.parent.is_dir():
+            console.print(f"error: directory does not exist: {out_path.parent}", style="red")
+            raise typer.Exit(2)
+        out_path.write_text(to_markdown(result))
         console.print(f"\nreview written to {output}", style="dim")
 
     # post review as github pr comment

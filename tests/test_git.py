@@ -82,12 +82,12 @@ class TestRange:
         repo.index.add(["file.txt"])
         second = repo.index.commit("second")
 
-        diff = get_diff(str(git_repo), range=f"{first}..{second.hexsha}")
+        diff = get_diff(str(git_repo), commit_range=f"{first}..{second.hexsha}")
         assert "range change" in diff
 
     def test_invalid_range_raises(self, git_repo):
         with pytest.raises(ValueError, match="invalid range format"):
-            get_diff(str(git_repo), range="abc123")
+            get_diff(str(git_repo), commit_range="abc123")
 
     def test_dash_prefixed_range_rejected(self, git_repo, tmp_path):
         # git treats --output=<file> as a flag that overwrites files, and the
@@ -95,7 +95,7 @@ class TestRange:
         # confirm nothing got written
         target = tmp_path / "pwned"
         with pytest.raises(ValueError, match="invalid range format"):
-            get_diff(str(git_repo), range=f"--output={target}..HEAD")
+            get_diff(str(git_repo), commit_range=f"--output={target}..HEAD")
         assert not target.exists()
 
 
