@@ -1,6 +1,7 @@
 # local diff extraction via gitpython
 
-from git import InvalidGitRepositoryError, NoSuchPathError, Repo
+from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Repo
+from gitdb.exc import BadName, BadObject
 
 
 def get_diff(
@@ -25,7 +26,10 @@ def get_diff(
         # reject dash-prefixed values, git would treat them as options
         if commit.startswith("-"):
             raise ValueError(f"invalid commit: {commit}")
-        commit_obj = repo.commit(commit)
+        try:
+            commit_obj = repo.commit(commit)
+        except (BadName, BadObject, ValueError):
+            raise ValueError(f"unknown commit: {commit}") from None
         if commit_obj.parents:
             return repo.git.diff(commit_obj.parents[0].hexsha, commit_obj.hexsha)
         # root commit, diff against empty tree
@@ -38,7 +42,10 @@ def get_diff(
     if commit_range:
         if commit_range.startswith("-") or ".." not in commit_range:
             raise ValueError(f"invalid range format, expected 'a..b': {commit_range}")
-        return repo.git.diff("--end-of-options", commit_range)
+        try:
+            return repo.git.diff("--end-of-options", commit_range)
+        except GitCommandError:
+            raise ValueError(f"cannot resolve range: {commit_range}") from None
 
     # staged only
     if staged:

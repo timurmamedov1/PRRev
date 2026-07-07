@@ -72,6 +72,12 @@ class TestCommit:
         with pytest.raises(ValueError, match="invalid commit"):
             get_diff(str(git_repo), commit="--output=/tmp/pwn")
 
+    def test_unknown_commit_raises_clean_error(self, git_repo):
+        # a rev that doesnt resolve should surface as ValueError, not a
+        # gitpython exception the cli cant catch
+        with pytest.raises(ValueError, match="unknown commit"):
+            get_diff(str(git_repo), commit="deadbeef123")
+
 
 class TestRange:
     def test_range_diff(self, git_repo):
@@ -88,6 +94,10 @@ class TestRange:
     def test_invalid_range_raises(self, git_repo):
         with pytest.raises(ValueError, match="invalid range format"):
             get_diff(str(git_repo), commit_range="abc123")
+
+    def test_unknown_range_raises_clean_error(self, git_repo):
+        with pytest.raises(ValueError, match="cannot resolve range"):
+            get_diff(str(git_repo), commit_range="foo..bar")
 
     def test_dash_prefixed_range_rejected(self, git_repo, tmp_path):
         # git treats --output=<file> as a flag that overwrites files, and the
