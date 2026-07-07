@@ -86,10 +86,11 @@ prrev . --provider anthropic --model claude-opus-4-8
 
 | Model | ID |
 |---|---|
+| Claude Fable 5 | `claude-fable-5` |
+| Claude Sonnet 5 | `claude-sonnet-5` (default) |
 | Claude Opus 4.8 | `claude-opus-4-8` |
 | Claude Opus 4.7 | `claude-opus-4-7` |
 | Claude Opus 4.6 | `claude-opus-4-6` |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` (default) |
 | Claude Haiku 4.5 | `claude-haiku-4-5` |
 
 **OpenAI:**
@@ -99,8 +100,10 @@ prrev . --provider anthropic --model claude-opus-4-8
 | GPT-4o | `gpt-4o` (default) |
 | GPT-4o mini | `gpt-4o-mini` |
 | GPT-4 Turbo | `gpt-4-turbo` |
-| o1 | `o1` |
-| o1-mini | `o1-mini` |
+| o1 | `o1` * |
+| o1-mini | `o1-mini` * |
+
+\* o1 models don't support structured output (`response_format`). Reviews may fail or return unparseable responses.
 
 ## How It Works
 
