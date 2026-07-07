@@ -22,6 +22,40 @@ def _is_github_url(target: str) -> bool:
     return target.startswith("https://github.com/") and "/pull/" in target
 
 
+async def _run(
+    target: str,
+    cfg,
+    llm,
+    *,
+    post: bool,
+    owner: str | None = None,
+    repo: str | None = None,
+    number: int | None = None,
+):
+    # fetch diff
+    if _is_github_url(target):
+        pr = await fetch_pr(owner, repo, number, cfg.github_token)
+        diff = pr.diff
+        console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold", markup=False)
+    else:
+        raise RuntimeError("_run should not be called for local diffs")
+
+    result = await review_diff(llm, diff, max_items=cfg.max_items)
+
+    if post:
+        items_for_api = [
+            {"file": i.file, "line": i.line, "severity": i.severity,
+             "summary": i.summary, "explanation": i.explanation,
+             "side": i.side}
+            for i in result.items
+        ]
+        body = to_markdown(result)
+        await post_review(owner, repo, number, body, cfg.github_token, items=items_for_api)
+        console.print("\nreview posted to PR", style="bold green")
+
+    return diff, result
+
+
 @app.callback(invoke_without_command=True)
 def main(
     target: str = typer.Argument(..., help="Local repo path or GitHub PR URL"),
@@ -48,31 +82,6 @@ def main(
     prov = provider or cfg.provider
     mdl = model or cfg.model
 
-    # route based on target type
-    if _is_github_url(target):
-        if not cfg.github_token:
-            console.print("error: GITHUB_TOKEN not set", style="red")
-            raise typer.Exit(2)
-        try:
-            owner, repo, number = parse_pr_url(target)
-            pr = asyncio.run(fetch_pr(owner, repo, number, cfg.github_token))
-            diff = pr.diff
-            # pr.title is attacker controlled, rich parses [tags] and would
-            # raise MarkupError on something like "Fix the [/x] parser"
-            console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold", markup=False)
-        except ValueError as e:
-            console.print(f"error: {e}", style="red")
-            raise typer.Exit(2)
-        except Exception as e:
-            console.print(f"failed to fetch PR: {e}", style="red")
-            raise typer.Exit(2)
-    else:
-        try:
-            diff = get_diff(target, commit=commit, commit_range=commit_range, staged=staged)
-        except ValueError as e:
-            console.print(f"error: {e}", style="red")
-            raise typer.Exit(2)
-
     # pick provider
     try:
         if prov == "openai":
@@ -86,12 +95,44 @@ def main(
         console.print(f"error: {e}", style="red")
         raise typer.Exit(2)
 
-    # run the review
-    try:
-        result = asyncio.run(review_diff(llm, diff, max_items=cfg.max_items))
-    except Exception as e:
-        console.print(f"review failed: {e}", style="red")
-        raise typer.Exit(2)
+    # route based on target type
+    if _is_github_url(target):
+        if not cfg.github_token:
+            console.print("error: GITHUB_TOKEN not set", style="red")
+            raise typer.Exit(2)
+        try:
+            owner, repo, number = parse_pr_url(target)
+        except ValueError as e:
+            console.print(f"error: {e}", style="red")
+            raise typer.Exit(2)
+
+        if post and not cfg.github_token:
+            console.print("error: GITHUB_TOKEN not set", style="red")
+            raise typer.Exit(2)
+
+        try:
+            diff, result = asyncio.run(_run(
+                target, cfg, llm,
+                post=post, owner=owner, repo=repo, number=number,
+            ))
+        except ValueError as e:
+            console.print(f"error: {e}", style="red")
+            raise typer.Exit(2)
+        except Exception as e:
+            console.print(f"review failed: {e}", style="red")
+            raise typer.Exit(2)
+    else:
+        try:
+            diff = get_diff(target, commit=commit, commit_range=commit_range, staged=staged)
+        except ValueError as e:
+            console.print(f"error: {e}", style="red")
+            raise typer.Exit(2)
+
+        try:
+            result = asyncio.run(review_diff(llm, diff, max_items=cfg.max_items))
+        except Exception as e:
+            console.print(f"review failed: {e}", style="red")
+            raise typer.Exit(2)
 
     # count files in the diff for the header
     file_count = diff.count("diff --git ")
@@ -106,31 +147,8 @@ def main(
         out_path.write_text(to_markdown(result))
         console.print(f"\nreview written to {output}", style="dim")
 
-    # post review as github pr comment
-    if post:
-        if not _is_github_url(target):
-            console.print("error: --post only works with github PR urls", style="red")
-            raise typer.Exit(2)
-        if not cfg.github_token:
-            console.print("error: GITHUB_TOKEN not set", style="red")
-            raise typer.Exit(2)
-        try:
-            items_for_api = [
-                {"file": i.file, "line": i.line, "severity": i.severity,
-                 "summary": i.summary, "explanation": i.explanation,
-                 "side": i.side}
-                for i in result.items
-            ]
-            body = to_markdown(result)
-            asyncio.run(post_review(owner, repo, number, body, cfg.github_token, items=items_for_api))
-            console.print("\nreview posted to PR", style="bold green")
-        except Exception as e:
-            console.print(f"failed to post review: {e}", style="red")
-            raise typer.Exit(2)
-
     # exit code based on --fail-on threshold
     if fail_on and result.items:
-        # severity levels, lower number = more severe
         severity_rank = {"critical": 0, "warning": 1, "suggestion": 2}
         threshold = severity_rank[fail_on]
         if any(severity_rank.get(i.severity, 2) <= threshold for i in result.items):
