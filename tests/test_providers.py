@@ -6,7 +6,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from prrev.llm.anthropic import AnthropicProvider
-from prrev.llm.openai import OpenAIProvider
+from prrev.llm.openai import REVIEW_SCHEMA, OpenAIProvider
+
+
+def _walk_schema_objects(schema):
+    """yields every object-typed node in a json schema tree"""
+    if isinstance(schema, dict):
+        if schema.get("type") == "object" and "properties" in schema:
+            yield schema
+        for value in schema.values():
+            yield from _walk_schema_objects(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            yield from _walk_schema_objects(value)
+
 
 SAMPLE_REVIEW = {
     "summary": "looks good overall",
@@ -198,3 +211,18 @@ class TestOpenAIProvider:
         count = provider.count_tokens("hello world")
         assert isinstance(count, int)
         assert count > 0
+
+
+class TestSchemaContract:
+    # openai strict mode only accepts schemas where every object lists all its
+    # property keys in required and sets additionalProperties to false
+
+    def test_openai_schema_is_strict(self):
+        assert REVIEW_SCHEMA["strict"] is True
+
+    def test_openai_objects_require_all_properties(self):
+        objects = list(_walk_schema_objects(REVIEW_SCHEMA["schema"]))
+        assert objects, "expected at least one object node in the schema"
+        for obj in objects:
+            assert obj.get("additionalProperties") is False
+            assert set(obj.get("required", [])) == set(obj["properties"])

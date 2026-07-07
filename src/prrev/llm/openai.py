@@ -50,7 +50,8 @@ REVIEW_SCHEMA = {
                             "description": "RIGHT for additions/modified lines, LEFT for deletions",
                         },
                     },
-                    "required": ["severity", "file", "line", "summary", "explanation"],
+                    # strict mode needs every property key listed in required
+                    "required": ["severity", "file", "line", "summary", "explanation", "side"],
                     "additionalProperties": False,
                 },
             },
