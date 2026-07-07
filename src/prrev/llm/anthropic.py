@@ -70,7 +70,7 @@ SYSTEM_PROMPT = (
 class AnthropicProvider(LLMProvider):
     max_input_tokens = 180_000  # claude sonnet/opus context is 200k, leave room for output
 
-    def __init__(self, model: str = "claude-sonnet-4-6", api_key: str | None = None):
+    def __init__(self, model: str = "claude-sonnet-5", api_key: str | None = None):
         self.model = model
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
