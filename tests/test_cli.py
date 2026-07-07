@@ -1,6 +1,6 @@
 # cli integration tests using typer's test runner
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -29,9 +29,12 @@ def _warning_item():
 
 def _mock_config(**overrides):
     defaults = dict(
-        provider="anthropic", model=None,
-        anthropic_api_key="sk-test", openai_api_key=None,
-        github_token=None, max_items=20,
+        provider="anthropic",
+        model=None,
+        anthropic_api_key="sk-test",
+        openai_api_key=None,
+        github_token=None,
+        max_items=20,
     )
     defaults.update(overrides)
     return MagicMock(**defaults)

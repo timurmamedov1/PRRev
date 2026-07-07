@@ -1,6 +1,6 @@
 # local diff extraction via gitpython
 
-from git import Repo, InvalidGitRepositoryError, NoSuchPathError
+from git import InvalidGitRepositoryError, NoSuchPathError, Repo
 
 
 def get_diff(
@@ -13,9 +13,9 @@ def get_diff(
     try:
         repo = Repo(repo_path)
     except InvalidGitRepositoryError:
-        raise ValueError(f"not a git repository: {repo_path}")
+        raise ValueError(f"not a git repository: {repo_path}") from None
     except NoSuchPathError:
-        raise ValueError(f"path does not exist: {repo_path}")
+        raise ValueError(f"path does not exist: {repo_path}") from None
 
     if repo.bare:
         raise ValueError(f"cannot diff a bare repository: {repo_path}")
@@ -49,11 +49,7 @@ def get_diff(
 
     # default: all uncommitted changes (staged + unstaged)
     # diff HEAD to catch both, but if theres no commits yet diff the index
-    if repo.head.is_valid():
-        diff = repo.git.diff("HEAD")
-    else:
-        # no commits yet, show whats staged
-        diff = repo.git.diff("--cached")
+    diff = repo.git.diff("HEAD") if repo.head.is_valid() else repo.git.diff("--cached")
 
     if not diff:
         raise ValueError("no changes found")

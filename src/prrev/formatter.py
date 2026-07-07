@@ -33,11 +33,13 @@ def _format_item(item: ReviewItem) -> Text:
 def print_review(result: ReviewResult, file_count: int = 0) -> None:
     # header panel
     subtitle = f"Reviewed {file_count} files" if file_count else "Review"
-    console.print(Panel(
-        Text("PRRev", style="bold white"),
-        subtitle=subtitle,
-        border_style="blue",
-    ))
+    console.print(
+        Panel(
+            Text("PRRev", style="bold white"),
+            subtitle=subtitle,
+            border_style="blue",
+        )
+    )
     console.print()
 
     if not result.items:
@@ -67,7 +69,7 @@ def to_markdown(result: ReviewResult) -> str:
             lines.append(f"**{item.summary}**\n")
             lines.append(f"{item.explanation}\n")
 
-    lines.append(f"## Summary\n")
+    lines.append("## Summary\n")
     lines.append(f"{result.summary}\n")
 
     return "\n".join(lines)

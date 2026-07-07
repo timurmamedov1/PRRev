@@ -78,13 +78,15 @@ async def review_diff(
 
     # add warnings for skipped files
     for skipped in skipped_files:
-        merged.items.append(ReviewItem(
-            severity="warning",
-            file=skipped,
-            line=None,
-            summary="file skipped, too large for context window",
-            explanation="this files diff exceeded the models token limit and was not reviewed.",
-        ))
+        merged.items.append(
+            ReviewItem(
+                severity="warning",
+                file=skipped,
+                line=None,
+                summary="file skipped, too large for context window",
+                explanation="this files diff exceeded the models token limit and was not reviewed.",
+            )
+        )
 
     return _truncate(merged, max_items)
 

@@ -34,7 +34,12 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
         "Accept": "application/json",
     }
 
-    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True, timeout=REQUEST_TIMEOUT) as client:
+    async with httpx.AsyncClient(
+        base_url=API_BASE,
+        headers=headers,
+        follow_redirects=True,
+        timeout=REQUEST_TIMEOUT,
+    ) as client:
         # get pr metadata
         resp = await client.get(f"/repos/{owner}/{repo}/pulls/{number}")
         resp.raise_for_status()
@@ -74,12 +79,17 @@ async def post_review(
     if items:
         for item in items:
             if item.get("file") and item.get("line"):
-                comments.append({
-                    "path": item["file"],
-                    "line": item["line"],
-                    "side": item.get("side", "RIGHT"),
-                    "body": f"**{item['severity'].upper()}**: {item['summary']}\n\n{item['explanation']}",
-                })
+                comments.append(
+                    {
+                        "path": item["file"],
+                        "line": item["line"],
+                        "side": item.get("side", "RIGHT"),
+                        "body": (
+                            f"**{item['severity'].upper()}**: "
+                            f"{item['summary']}\n\n{item['explanation']}"
+                        ),
+                    }
+                )
 
     payload: dict = {
         "body": body,
@@ -88,7 +98,12 @@ async def post_review(
     if comments:
         payload["comments"] = comments
 
-    async with httpx.AsyncClient(base_url=API_BASE, headers=headers, follow_redirects=True, timeout=REQUEST_TIMEOUT) as client:
+    async with httpx.AsyncClient(
+        base_url=API_BASE,
+        headers=headers,
+        follow_redirects=True,
+        timeout=REQUEST_TIMEOUT,
+    ) as client:
         resp = await client.post(
             f"/repos/{owner}/{repo}/pulls/{number}/reviews",
             json=payload,

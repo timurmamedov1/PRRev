@@ -22,6 +22,29 @@ def _is_github_url(target: str) -> bool:
     return target.startswith("https://github.com/") and "/pull/" in target
 
 
+def _make_provider(name: str, model: str | None, cfg):
+    if name == "openai":
+        return (
+            OpenAIProvider(
+                model=model,
+                api_key=cfg.openai_api_key,
+            )
+            if model
+            else OpenAIProvider(api_key=cfg.openai_api_key)
+        )
+    elif name == "anthropic":
+        return (
+            AnthropicProvider(
+                model=model,
+                api_key=cfg.anthropic_api_key,
+            )
+            if model
+            else AnthropicProvider(api_key=cfg.anthropic_api_key)
+        )
+    else:
+        return None
+
+
 async def _run(
     target: str,
     cfg,
@@ -36,7 +59,11 @@ async def _run(
     if _is_github_url(target):
         pr = await fetch_pr(owner, repo, number, cfg.github_token)
         diff = pr.diff
-        console.print(f"reviewing PR #{pr.number}: {pr.title}", style="bold", markup=False)
+        console.print(
+            f"reviewing PR #{pr.number}: {pr.title}",
+            style="bold",
+            markup=False,
+        )
     else:
         raise RuntimeError("_run should not be called for local diffs")
 
@@ -44,13 +71,25 @@ async def _run(
 
     if post:
         items_for_api = [
-            {"file": i.file, "line": i.line, "severity": i.severity,
-             "summary": i.summary, "explanation": i.explanation,
-             "side": i.side}
+            {
+                "file": i.file,
+                "line": i.line,
+                "severity": i.severity,
+                "summary": i.summary,
+                "explanation": i.explanation,
+                "side": i.side,
+            }
             for i in result.items
         ]
         body = to_markdown(result)
-        await post_review(owner, repo, number, body, cfg.github_token, items=items_for_api)
+        await post_review(
+            owner,
+            repo,
+            number,
+            body,
+            cfg.github_token,
+            items=items_for_api,
+        )
         console.print("\nreview posted to PR", style="bold green")
 
     return diff, result
@@ -60,20 +99,26 @@ async def _run(
 def main(
     target: str = typer.Argument(..., help="Local repo path or GitHub PR URL"),
     commit: str | None = typer.Option(None, help="Review a specific commit"),
-    commit_range: str | None = typer.Option(None, "--range", help="Review a commit range (abc..def)"),
+    commit_range: str | None = typer.Option(
+        None,
+        "--range",
+        help="Review a commit range (abc..def)",
+    ),
     staged: bool = typer.Option(False, help="Review only staged changes"),
     provider: str | None = typer.Option(None, help="LLM provider: anthropic or openai"),
     model: str | None = typer.Option(None, help="Model override"),
     post: bool = typer.Option(False, help="Post review as GitHub PR comment"),
     output: str | None = typer.Option(None, help="Write review to markdown file"),
     fail_on: str | None = typer.Option(
-        None, help="Exit 1 if issues at this severity or above (critical, warning, suggestion)"
+        None,
+        help="Exit 1 if issues at this severity or above",
     ),
 ) -> None:
     # validate --fail-on early
     valid_severities = {"critical", "warning", "suggestion"}
     if fail_on and fail_on not in valid_severities:
-        console.print(f"error: --fail-on must be one of: {', '.join(valid_severities)}", style="red")
+        msg = f"error: --fail-on must be one of: {', '.join(valid_severities)}"
+        console.print(msg, style="red")
         raise typer.Exit(2)
 
     # cli flags override config, config fills in defaults
@@ -84,16 +129,13 @@ def main(
 
     # pick provider
     try:
-        if prov == "openai":
-            llm = OpenAIProvider(model=mdl, api_key=cfg.openai_api_key) if mdl else OpenAIProvider(api_key=cfg.openai_api_key)
-        elif prov == "anthropic":
-            llm = AnthropicProvider(model=mdl, api_key=cfg.anthropic_api_key) if mdl else AnthropicProvider(api_key=cfg.anthropic_api_key)
-        else:
+        llm = _make_provider(prov, mdl, cfg)
+        if llm is None:
             console.print(f"unknown provider: {prov}", style="red")
             raise typer.Exit(2)
     except ValueError as e:
         console.print(f"error: {e}", style="red")
-        raise typer.Exit(2)
+        raise typer.Exit(2) from None
 
     # route based on target type
     if _is_github_url(target):
@@ -104,35 +146,45 @@ def main(
             owner, repo, number = parse_pr_url(target)
         except ValueError as e:
             console.print(f"error: {e}", style="red")
-            raise typer.Exit(2)
-
-        if post and not cfg.github_token:
-            console.print("error: GITHUB_TOKEN not set", style="red")
-            raise typer.Exit(2)
+            raise typer.Exit(2) from None
 
         try:
-            diff, result = asyncio.run(_run(
-                target, cfg, llm,
-                post=post, owner=owner, repo=repo, number=number,
-            ))
+            diff, result = asyncio.run(
+                _run(
+                    target,
+                    cfg,
+                    llm,
+                    post=post,
+                    owner=owner,
+                    repo=repo,
+                    number=number,
+                )
+            )
         except ValueError as e:
             console.print(f"error: {e}", style="red")
-            raise typer.Exit(2)
+            raise typer.Exit(2) from None
         except Exception as e:
             console.print(f"review failed: {e}", style="red")
-            raise typer.Exit(2)
+            raise typer.Exit(2) from None
     else:
         try:
-            diff = get_diff(target, commit=commit, commit_range=commit_range, staged=staged)
+            diff = get_diff(
+                target,
+                commit=commit,
+                commit_range=commit_range,
+                staged=staged,
+            )
         except ValueError as e:
             console.print(f"error: {e}", style="red")
-            raise typer.Exit(2)
+            raise typer.Exit(2) from None
 
         try:
-            result = asyncio.run(review_diff(llm, diff, max_items=cfg.max_items))
+            result = asyncio.run(
+                review_diff(llm, diff, max_items=cfg.max_items),
+            )
         except Exception as e:
             console.print(f"review failed: {e}", style="red")
-            raise typer.Exit(2)
+            raise typer.Exit(2) from None
 
     # count files in the diff for the header
     file_count = diff.count("diff --git ")
@@ -142,7 +194,10 @@ def main(
     if output:
         out_path = Path(output).resolve()
         if not out_path.parent.is_dir():
-            console.print(f"error: directory does not exist: {out_path.parent}", style="red")
+            console.print(
+                f"error: directory does not exist: {out_path.parent}",
+                style="red",
+            )
             raise typer.Exit(2)
         out_path.write_text(to_markdown(result))
         console.print(f"\nreview written to {output}", style="dim")

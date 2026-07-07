@@ -5,11 +5,17 @@ import io
 from rich.console import Console
 
 from prrev import formatter as fmt
-from prrev.formatter import to_markdown, _format_item, print_review
+from prrev.formatter import _format_item, print_review, to_markdown
 from prrev.llm.base import ReviewItem, ReviewResult
 
 
-def _item(severity="warning", file="app.py", line=10, summary="something wrong", explanation="here is why"):
+def _item(
+    severity="warning",
+    file="app.py",
+    line=10,
+    summary="something wrong",
+    explanation="here is why",
+):
     return ReviewItem(
         severity=severity,
         file=file,

@@ -3,7 +3,7 @@
 import pytest
 
 from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
-from prrev.reviewer import _truncate, _merge_results, review_diff
+from prrev.reviewer import _merge_results, _truncate, review_diff
 
 
 class FakeProvider(LLMProvider):

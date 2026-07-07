@@ -8,7 +8,6 @@ import pytest
 from prrev.llm.anthropic import AnthropicProvider
 from prrev.llm.openai import OpenAIProvider
 
-
 SAMPLE_REVIEW = {
     "summary": "looks good overall",
     "items": [
@@ -25,9 +24,11 @@ SAMPLE_REVIEW = {
 
 class TestAnthropicProvider:
     def test_missing_api_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY not set"):
-                AnthropicProvider(api_key=None)
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ValueError, match="ANTHROPIC_API_KEY not set"),
+        ):
+            AnthropicProvider(api_key=None)
 
     def test_accepts_explicit_key(self):
         provider = AnthropicProvider(api_key="sk-test-123")
@@ -106,9 +107,11 @@ class TestAnthropicProvider:
 
 class TestOpenAIProvider:
     def test_missing_api_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="OPENAI_API_KEY not set"):
-                OpenAIProvider(api_key=None)
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ValueError, match="OPENAI_API_KEY not set"),
+        ):
+            OpenAIProvider(api_key=None)
 
     def test_accepts_explicit_key(self):
         provider = OpenAIProvider(api_key="sk-test-123")

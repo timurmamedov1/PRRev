@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from prrev.cli import _is_github_url
 from prrev.github import parse_pr_url, post_review
 from prrev.reviewer import _split_by_file
-from prrev.cli import _is_github_url
 
 
 class TestParsePrUrl:
@@ -97,18 +97,25 @@ class TestIsGithubUrl:
 
 class TestPostReview:
     async def test_inline_comments_posted(self):
-        items = [{"file": "app.py", "line": 10, "severity": "warning",
-                  "summary": "unused import", "explanation": "os is unused"}]
+        items = [
+            {
+                "file": "app.py",
+                "line": 10,
+                "severity": "warning",
+                "summary": "unused import",
+                "explanation": "os is unused",
+            }
+        ]
 
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = lambda: None
 
-        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
             ctx = AsyncMock()
             ctx.post = AsyncMock(return_value=mock_resp)
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             await post_review("o", "r", 1, "body", "tok", items=items)
             payload = ctx.post.call_args[1]["json"]
@@ -116,8 +123,15 @@ class TestPostReview:
             assert payload["comments"][0]["path"] == "app.py"
 
     async def test_422_falls_back_to_body(self):
-        items = [{"file": "app.py", "line": 999, "severity": "warning",
-                  "summary": "bad line", "explanation": "not in diff"}]
+        items = [
+            {
+                "file": "app.py",
+                "line": 999,
+                "severity": "warning",
+                "summary": "bad line",
+                "explanation": "not in diff",
+            }
+        ]
 
         rejected = AsyncMock()
         rejected.status_code = 422
@@ -126,11 +140,11 @@ class TestPostReview:
         ok.status_code = 200
         ok.raise_for_status = lambda: None
 
-        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
             ctx = AsyncMock()
             ctx.post = AsyncMock(side_effect=[rejected, ok])
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             await post_review("o", "r", 1, "body", "tok", items=items)
             assert ctx.post.call_count == 2
@@ -139,19 +153,26 @@ class TestPostReview:
             assert "app.py:999" in fallback_payload["body"]
 
     async def test_deletion_comment_uses_left_side(self):
-        items = [{"file": "app.py", "line": 5, "severity": "warning",
-                  "summary": "removed guard", "explanation": "was needed",
-                  "side": "LEFT"}]
+        items = [
+            {
+                "file": "app.py",
+                "line": 5,
+                "severity": "warning",
+                "summary": "removed guard",
+                "explanation": "was needed",
+                "side": "LEFT",
+            }
+        ]
 
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = lambda: None
 
-        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
             ctx = AsyncMock()
             ctx.post = AsyncMock(return_value=mock_resp)
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             await post_review("o", "r", 1, "body", "tok", items=items)
             payload = ctx.post.call_args[1]["json"]
@@ -162,14 +183,18 @@ class TestPostReview:
         rejected = AsyncMock()
         rejected.status_code = 422
         rejected.raise_for_status = lambda: (_ for _ in ()).throw(
-            httpx.HTTPStatusError("422", request=httpx.Request("POST", "http://x"), response=httpx.Response(422))
+            httpx.HTTPStatusError(
+                "422",
+                request=httpx.Request("POST", "http://x"),
+                response=httpx.Response(422),
+            )
         )
 
-        with patch("prrev.github.httpx.AsyncClient") as MockClient:
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
             ctx = AsyncMock()
             ctx.post = AsyncMock(return_value=rejected)
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=ctx)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with pytest.raises(httpx.HTTPStatusError):
                 await post_review("o", "r", 1, "body", "tok", items=None)

@@ -1,14 +1,12 @@
 # tests for config loading and precedence
 
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from prrev import config as config_mod
-from prrev.config import Config, load_config, _apply_toml
-
+from prrev.config import Config, _apply_toml, load_config
 
 # vars load_config reads from the env, cleared before each test so the
 # developers real shell env (a live GITHUB_TOKEN etc) cant leak into asserts
