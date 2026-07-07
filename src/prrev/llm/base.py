@@ -10,6 +10,7 @@ class ReviewItem:
     summary: str
     explanation: str
     side: str = "RIGHT"  # RIGHT for additions, LEFT for deletions
+    notice: bool = False  # tool-generated note (skipped file etc), not a model finding
 
 
 @dataclass

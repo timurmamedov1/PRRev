@@ -78,6 +78,24 @@ class TestFailOn:
         result = runner.invoke(app, ["--fail-on", "critical", "."])
         assert result.exit_code == 0
 
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_notices_dont_trip_threshold(self, mock_config, mock_diff, mock_review):
+        # a skipped-file notice is severity warning but shouldnt fail ci
+        mock_config.return_value = _mock_config()
+        notice = ReviewItem(
+            severity="warning",
+            file="big.py",
+            line=None,
+            summary="file skipped, too large for context window",
+            explanation="not reviewed",
+            notice=True,
+        )
+        mock_review.return_value = _mock_review_result([notice])
+        result = runner.invoke(app, ["--fail-on", "warning", "."])
+        assert result.exit_code == 0
+
     def test_invalid_fail_on_exits_2(self):
         result = runner.invoke(app, ["--fail-on", "banana", "."])
         assert result.exit_code == 2

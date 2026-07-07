@@ -202,9 +202,11 @@ def main(
         out_path.write_text(to_markdown(result))
         console.print(f"\nreview written to {output}", style="dim")
 
-    # exit code based on --fail-on threshold
+    # exit code based on --fail-on threshold. tool notices (skipped files,
+    # failed chunks) dont count as findings for ci purposes
     if fail_on and result.items:
         severity_rank = {"critical": 0, "warning": 1, "suggestion": 2}
         threshold = severity_rank[fail_on]
-        if any(severity_rank.get(i.severity, 2) <= threshold for i in result.items):
+        findings = (i for i in result.items if not i.notice)
+        if any(severity_rank.get(i.severity, 2) <= threshold for i in findings):
             raise typer.Exit(1)
