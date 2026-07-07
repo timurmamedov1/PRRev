@@ -2,13 +2,27 @@
 # auto-chunks when diff exceeds 80% of the providers context window
 
 import asyncio
+import re
 
 from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
 
 DIFF_HEADER = "diff --git "
 
+_HEADER_PATH = re.compile(r"^diff --git a/.* b/(.*)$")
+
+
+def _path_from_header(header_line: str) -> str:
+    # pull the new-side path out of a "diff --git a/x b/x" header so
+    # warnings show a filename instead of the raw header
+    m = _HEADER_PATH.match(header_line)
+    return m.group(1) if m else header_line
+
+
 # chunk when diff uses more than 80% of the providers max input tokens
 CHUNK_THRESHOLD = 0.8
+
+# dont fire every chunk at the api at once, big diffs would trip rate limits
+MAX_CONCURRENT_REVIEWS = 5
 
 
 def _byte_len(text: str) -> int:
@@ -55,26 +69,55 @@ async def review_diff(
 
     # diff is too big, split by file and review in parallel
     file_diffs = _split_by_file(diff)
-    if len(file_diffs) <= 1:
-        # single file thats too big, just send it and hope for the best.
-        # TODO: split within file by hunk
-        result = await provider.review(diff)
-        return _truncate(result, max_items)
 
     # skip files that individually exceed the threshold, same byte-length
-    # shortcut so we dont call count_tokens for every small chunk
+    # shortcut so we dont call count_tokens for every small chunk.
+    # TODO: split oversized files by hunk instead of skipping them
     reviewable = []
     skipped_files = []
     for chunk in file_diffs:
         if _byte_len(chunk) > threshold and provider.count_tokens(chunk) > threshold:
-            # grab filename from the diff header for the warning
-            first_line = chunk.split("\n", 1)[0]
-            skipped_files.append(first_line)
+            skipped_files.append(_path_from_header(chunk.split("\n", 1)[0]))
         else:
             reviewable.append(chunk)
 
-    results = await asyncio.gather(*[provider.review(d) for d in reviewable])
-    merged = _merge_results(list(results))
+    # review chunks in parallel. one chunk failing shouldnt sink the others,
+    # so failures are collected and surfaced as warnings on the merged result
+    sem = asyncio.Semaphore(MAX_CONCURRENT_REVIEWS)
+
+    async def _review_chunk(chunk: str) -> ReviewResult:
+        async with sem:
+            return await provider.review(chunk)
+
+    results = await asyncio.gather(
+        *[_review_chunk(d) for d in reviewable],
+        return_exceptions=True,
+    )
+
+    ok_results: list[ReviewResult] = []
+    failed_chunks: list[tuple[str, Exception]] = []
+    for chunk, res in zip(reviewable, results, strict=True):
+        if isinstance(res, ReviewResult):
+            ok_results.append(res)
+        elif isinstance(res, Exception):
+            failed_chunks.append((chunk, res))
+        else:
+            # cancellation and other BaseExceptions still propagate
+            raise res
+
+    merged = _merge_results(ok_results)
+
+    for chunk, exc in failed_chunks:
+        merged.items.append(
+            ReviewItem(
+                severity="warning",
+                file=_path_from_header(chunk.split("\n", 1)[0]),
+                line=None,
+                summary="file not reviewed, provider call failed",
+                explanation=f"reviewing this files diff failed: {exc}",
+                notice=True,
+            )
+        )
 
     # add warnings for skipped files
     for skipped in skipped_files:
@@ -85,6 +128,7 @@ async def review_diff(
                 line=None,
                 summary="file skipped, too large for context window",
                 explanation="this files diff exceeded the models token limit and was not reviewed.",
+                notice=True,
             )
         )
 
