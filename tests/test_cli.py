@@ -59,6 +59,29 @@ class TestLocalReview:
         assert "no changes found" in result.output
 
 
+class TestArgumentOrder:
+    # readme examples put the target first, so options must parse on
+    # either side of it
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_options_after_target(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config()
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, [".", "--fail-on", "critical"])
+        assert result.exit_code == 0
+
+    @patch("prrev.cli.get_diff", side_effect=ValueError("no staged changes found"))
+    @patch("prrev.cli.load_config")
+    def test_staged_after_target(self, mock_config, mock_diff):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--staged"])
+        assert result.exit_code == 2
+        assert "no staged changes" in result.output
+        assert mock_diff.call_args.kwargs["staged"] is True
+
+
 class TestFailOn:
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)
     @patch("prrev.cli.get_diff", return_value="diff content")

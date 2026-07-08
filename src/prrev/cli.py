@@ -1,4 +1,5 @@
-# single command cli, uses callback bc theres no subcommands
+# single command cli, typer runs the lone command directly so options
+# parse on either side of the target
 
 import asyncio
 from pathlib import Path
@@ -95,7 +96,7 @@ async def _run(
     return diff, result
 
 
-@app.callback(invoke_without_command=True)
+@app.command()
 def main(
     target: str = typer.Argument(..., help="Local repo path or GitHub PR URL"),
     commit: str | None = typer.Option(None, help="Review a specific commit"),
