@@ -122,10 +122,27 @@ def main(
         console.print(msg, style="red")
         raise typer.Exit(2)
 
+    # mode flags pick one diff source, so combinations are rejected up front
+    is_url = _is_github_url(target)
+    mode_flags = [
+        name
+        for name, value in (("--commit", commit), ("--range", commit_range), ("--staged", staged))
+        if value
+    ]
+    if len(mode_flags) > 1:
+        console.print(f"error: {' and '.join(mode_flags)} are mutually exclusive", style="red")
+        raise typer.Exit(2)
+    if is_url and mode_flags:
+        console.print(f"error: {mode_flags[0]} only applies to local repos", style="red")
+        raise typer.Exit(2)
+    if post and not is_url:
+        console.print("error: --post requires a github pr url target", style="red")
+        raise typer.Exit(2)
+
     # cli flags override config, config fills in defaults. repo config lives
     # at the repo root, which may be above the target path
     repo_path = None
-    if not _is_github_url(target):
+    if not is_url:
         repo_path = find_repo_root(target) or target
     try:
         cfg = load_config(repo_path=repo_path)
@@ -147,7 +164,7 @@ def main(
         raise typer.Exit(2) from None
 
     # route based on target type
-    if _is_github_url(target):
+    if is_url:
         if not cfg.github_token:
             console.print("error: GITHUB_TOKEN not set", style="red")
             raise typer.Exit(2)

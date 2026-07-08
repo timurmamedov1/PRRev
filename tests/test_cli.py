@@ -77,6 +77,36 @@ class TestLocalReview:
         mock_config.assert_called_once_with(repo_path="/repo/root")
 
 
+class TestFlagConflicts:
+    @patch("prrev.cli.load_config")
+    def test_commit_and_staged_conflict(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--commit", "abc", "--staged"])
+        assert result.exit_code == 2
+        assert "mutually exclusive" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_commit_and_range_conflict(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--commit", "abc", "--range", "a..b"])
+        assert result.exit_code == 2
+        assert "mutually exclusive" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_mode_flag_with_url_rejected(self, mock_config):
+        mock_config.return_value = _mock_config(github_token="tok")
+        result = runner.invoke(app, ["https://github.com/user/repo/pull/1", "--staged"])
+        assert result.exit_code == 2
+        assert "local repos" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_post_requires_url(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--post"])
+        assert result.exit_code == 2
+        assert "--post requires" in result.output
+
+
 class TestArgumentOrder:
     # readme examples put the target first, so options must parse on
     # either side of it
