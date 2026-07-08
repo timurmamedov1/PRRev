@@ -64,6 +64,18 @@ class TestLocalReview:
         assert result.exit_code == 2
         assert "invalid config" in result.output
 
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.find_repo_root", return_value="/repo/root")
+    @patch("prrev.cli.load_config")
+    def test_config_loaded_from_repo_root(self, mock_config, mock_root, mock_diff, mock_review):
+        # repo config is read from the discovered root, not the target path
+        mock_config.return_value = _mock_config()
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["sub/dir"])
+        assert result.exit_code == 0
+        mock_config.assert_called_once_with(repo_path="/repo/root")
+
 
 class TestArgumentOrder:
     # readme examples put the target first, so options must parse on

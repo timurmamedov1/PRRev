@@ -4,6 +4,16 @@ from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Rep
 from gitdb.exc import BadName, BadObject
 
 
+def find_repo_root(path: str) -> str | None:
+    # walk up from path to the working tree root. config and diffs both
+    # anchor there so prrev works from anywhere inside a repo
+    try:
+        repo = Repo(path, search_parent_directories=True)
+    except (InvalidGitRepositoryError, NoSuchPathError):
+        return None
+    return repo.working_tree_dir
+
+
 def get_diff(
     repo_path: str,
     *,
@@ -12,7 +22,7 @@ def get_diff(
     staged: bool = False,
 ) -> str:
     try:
-        repo = Repo(repo_path)
+        repo = Repo(repo_path, search_parent_directories=True)
     except InvalidGitRepositoryError:
         raise ValueError(f"not a git repository: {repo_path}") from None
     except NoSuchPathError:

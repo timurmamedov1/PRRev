@@ -9,7 +9,7 @@ from rich.console import Console
 
 from prrev.config import load_config
 from prrev.formatter import print_review, to_markdown
-from prrev.git import get_diff
+from prrev.git import find_repo_root, get_diff
 from prrev.github import fetch_pr, parse_pr_url, post_review
 from prrev.llm.anthropic import AnthropicProvider
 from prrev.llm.openai import OpenAIProvider
@@ -122,8 +122,11 @@ def main(
         console.print(msg, style="red")
         raise typer.Exit(2)
 
-    # cli flags override config, config fills in defaults
-    repo_path = target if not _is_github_url(target) else None
+    # cli flags override config, config fills in defaults. repo config lives
+    # at the repo root, which may be above the target path
+    repo_path = None
+    if not _is_github_url(target):
+        repo_path = find_repo_root(target) or target
     try:
         cfg = load_config(repo_path=repo_path)
     except ValueError as e:

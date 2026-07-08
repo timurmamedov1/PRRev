@@ -1,9 +1,11 @@
 # tests for local diff extraction
 
+from pathlib import Path
+
 import pytest
 from git import Repo
 
-from prrev.git import get_diff
+from prrev.git import find_repo_root, get_diff
 
 
 @pytest.fixture
@@ -107,6 +109,23 @@ class TestRange:
         with pytest.raises(ValueError, match="invalid range format"):
             get_diff(str(git_repo), commit_range=f"--output={target}..HEAD")
         assert not target.exists()
+
+
+class TestRepoRoot:
+    def test_get_diff_from_subdir(self, git_repo):
+        (git_repo / "sub").mkdir()
+        (git_repo / "file.txt").write_text("changed\n")
+        diff = get_diff(str(git_repo / "sub"))
+        assert "changed" in diff
+
+    def test_find_repo_root_from_subdir(self, git_repo):
+        (git_repo / "sub").mkdir()
+        root = find_repo_root(str(git_repo / "sub"))
+        assert root is not None
+        assert Path(root).resolve() == git_repo.resolve()
+
+    def test_find_repo_root_outside_repo(self, tmp_path):
+        assert find_repo_root(str(tmp_path)) is None
 
 
 class TestErrors:
