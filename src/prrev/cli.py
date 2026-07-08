@@ -225,7 +225,7 @@ def main(
                 style="red",
             )
             raise typer.Exit(2)
-        out_path.write_text(to_markdown(result))
+        out_path.write_text(to_markdown(result), encoding="utf-8")
         console.print(f"\nreview written to {output}", style="dim")
 
     # exit code based on --fail-on threshold. tool notices (skipped files,
