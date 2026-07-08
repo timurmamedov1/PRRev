@@ -212,8 +212,9 @@ def main(
             console.print(f"review failed: {e}", style="red")
             raise typer.Exit(2) from None
 
-    # count files in the diff for the header
-    file_count = diff.count("diff --git ")
+    # count files in the diff for the header. only header lines count,
+    # added content can legitimately contain the same text
+    file_count = sum(1 for line in diff.splitlines() if line.startswith("diff --git "))
     print_review(result, file_count=file_count)
 
     # markdown output

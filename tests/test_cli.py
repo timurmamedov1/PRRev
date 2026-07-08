@@ -77,6 +77,24 @@ class TestLocalReview:
         mock_config.assert_called_once_with(repo_path="/repo/root")
 
 
+class TestFileCount:
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff")
+    @patch("prrev.cli.load_config")
+    def test_added_diff_text_not_counted(self, mock_config, mock_diff, mock_review):
+        # an added line containing diff header text isnt a file boundary
+        mock_config.return_value = _mock_config()
+        mock_diff.return_value = (
+            "diff --git a/fixture.txt b/fixture.txt\n"
+            "+diff --git a/embedded.py b/embedded.py\n"
+            "+more added content\n"
+        )
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 0
+        assert "Reviewed 1 files" in result.output
+
+
 class TestFlagConflicts:
     @patch("prrev.cli.load_config")
     def test_commit_and_staged_conflict(self, mock_config):
