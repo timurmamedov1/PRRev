@@ -124,7 +124,12 @@ def main(
 
     # cli flags override config, config fills in defaults
     repo_path = target if not _is_github_url(target) else None
-    cfg = load_config(repo_path=repo_path)
+    try:
+        cfg = load_config(repo_path=repo_path)
+    except ValueError as e:
+        # also covers TOMLDecodeError from a malformed config file
+        console.print(f"error: invalid config: {e}", style="red")
+        raise typer.Exit(2) from None
     prov = provider or cfg.provider
     mdl = model or cfg.model
 

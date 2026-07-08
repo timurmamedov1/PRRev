@@ -58,6 +58,12 @@ class TestLocalReview:
         assert result.exit_code == 2
         assert "no changes found" in result.output
 
+    @patch("prrev.cli.load_config", side_effect=ValueError("max_items must be an integer"))
+    def test_invalid_config_exits_2(self, mock_config):
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 2
+        assert "invalid config" in result.output
+
 
 class TestArgumentOrder:
     # readme examples put the target first, so options must parse on

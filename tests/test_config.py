@@ -116,6 +116,29 @@ class TestEnvVarOverride:
         assert cfg.github_token == "ghp_test"
 
 
+class TestInvalidConfig:
+    def test_non_integer_env_max_items_raises(self):
+        env = {"PRREV_MAX_ITEMS": "abc"}
+        with (
+            patch.dict(os.environ, env, clear=False),
+            pytest.raises(ValueError, match="PRREV_MAX_ITEMS"),
+        ):
+            load_config()
+
+    def test_non_integer_toml_max_items_raises(self, tmp_path):
+        toml_file = tmp_path / ".prrev.toml"
+        toml_file.write_text('[review]\nmax_items = "lots"\n')
+        with pytest.raises(ValueError, match="max_items"):
+            load_config(repo_path=str(tmp_path))
+
+    def test_malformed_toml_raises(self, tmp_path):
+        # TOMLDecodeError subclasses ValueError so the cli catch covers it
+        toml_file = tmp_path / ".prrev.toml"
+        toml_file.write_text("not [ valid toml")
+        with pytest.raises(ValueError):
+            load_config(repo_path=str(tmp_path))
+
+
 class TestLoadConfig:
     def test_missing_toml_returns_defaults(self):
         cfg = load_config(repo_path="/nonexistent/path")

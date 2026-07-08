@@ -55,7 +55,10 @@ def load_config(repo_path: str | None = None) -> Config:
     if v := os.environ.get("PRREV_MODEL"):
         cfg.model = v
     if v := os.environ.get("PRREV_MAX_ITEMS"):
-        cfg.max_items = int(v)
+        try:
+            cfg.max_items = int(v)
+        except ValueError:
+            raise ValueError(f"PRREV_MAX_ITEMS must be an integer, got {v!r}") from None
     if v := os.environ.get("GITHUB_TOKEN"):
         cfg.github_token = v
     if v := os.environ.get("ANTHROPIC_API_KEY"):
@@ -75,7 +78,10 @@ def _apply_toml(cfg: Config, data: dict, *, allow_tokens: bool) -> None:
 
     review = data.get("review", {})
     if v := review.get("max_items"):
-        cfg.max_items = int(v)
+        try:
+            cfg.max_items = int(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"max_items must be an integer, got {v!r}") from None
 
     # tokens only from global config, not repo config
     if allow_tokens:
