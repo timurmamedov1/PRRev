@@ -77,6 +77,27 @@ class TestLocalReview:
         mock_config.assert_called_once_with(repo_path="/repo/root")
 
 
+class TestDebug:
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_debug_reraises_the_real_error(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config()
+        mock_review.side_effect = RuntimeError("boom")
+        result = runner.invoke(app, [".", "--debug"])
+        assert isinstance(result.exception, RuntimeError)
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_without_debug_prints_short_error(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config()
+        mock_review.side_effect = RuntimeError("boom")
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 2
+        assert "review failed: boom" in result.output
+
+
 class TestFileCount:
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)
     @patch("prrev.cli.get_diff")

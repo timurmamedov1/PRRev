@@ -19,6 +19,15 @@ app = typer.Typer(add_completion=False)
 console = Console()
 
 
+def _fail(message: str, *, debug: bool) -> None:
+    # only call from inside an except block. --debug swaps the one-line
+    # message for the real traceback
+    if debug:
+        raise
+    console.print(message, style="red")
+    raise typer.Exit(2) from None
+
+
 def _is_github_url(target: str) -> bool:
     return target.startswith("https://github.com/") and "/pull/" in target
 
@@ -114,6 +123,7 @@ def main(
         None,
         help="Exit 1 if issues at this severity or above",
     ),
+    debug: bool = typer.Option(False, help="Show full tracebacks instead of short errors"),
 ) -> None:
     # validate --fail-on early
     valid_severities = {"critical", "warning", "suggestion"}
@@ -148,8 +158,7 @@ def main(
         cfg = load_config(repo_path=repo_path)
     except ValueError as e:
         # also covers TOMLDecodeError from a malformed config file
-        console.print(f"error: invalid config: {e}", style="red")
-        raise typer.Exit(2) from None
+        _fail(f"error: invalid config: {e}", debug=debug)
     prov = provider or cfg.provider
     mdl = model or cfg.model
 
@@ -160,8 +169,7 @@ def main(
             console.print(f"unknown provider: {prov}", style="red")
             raise typer.Exit(2)
     except ValueError as e:
-        console.print(f"error: {e}", style="red")
-        raise typer.Exit(2) from None
+        _fail(f"error: {e}", debug=debug)
 
     # route based on target type
     if is_url:
@@ -171,8 +179,7 @@ def main(
         try:
             owner, repo, number = parse_pr_url(target)
         except ValueError as e:
-            console.print(f"error: {e}", style="red")
-            raise typer.Exit(2) from None
+            _fail(f"error: {e}", debug=debug)
 
         try:
             diff, result = asyncio.run(
@@ -187,11 +194,9 @@ def main(
                 )
             )
         except ValueError as e:
-            console.print(f"error: {e}", style="red")
-            raise typer.Exit(2) from None
+            _fail(f"error: {e}", debug=debug)
         except Exception as e:
-            console.print(f"review failed: {e}", style="red")
-            raise typer.Exit(2) from None
+            _fail(f"review failed: {e}", debug=debug)
     else:
         try:
             diff = get_diff(
@@ -201,16 +206,14 @@ def main(
                 staged=staged,
             )
         except ValueError as e:
-            console.print(f"error: {e}", style="red")
-            raise typer.Exit(2) from None
+            _fail(f"error: {e}", debug=debug)
 
         try:
             result = asyncio.run(
                 review_diff(llm, diff, max_items=cfg.max_items),
             )
         except Exception as e:
-            console.print(f"review failed: {e}", style="red")
-            raise typer.Exit(2) from None
+            _fail(f"review failed: {e}", debug=debug)
 
     # count files in the diff for the header. only header lines count,
     # added content can legitimately contain the same text
