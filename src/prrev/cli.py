@@ -32,27 +32,21 @@ def _is_github_url(target: str) -> bool:
     return target.startswith("https://github.com/") and "/pull/" in target
 
 
+# provider name -> (class, config field holding its api key)
+PROVIDERS = {
+    "openai": (OpenAIProvider, "openai_api_key"),
+    "anthropic": (AnthropicProvider, "anthropic_api_key"),
+}
+
+
 def _make_provider(name: str, model: str | None, cfg):
-    if name == "openai":
-        return (
-            OpenAIProvider(
-                model=model,
-                api_key=cfg.openai_api_key,
-            )
-            if model
-            else OpenAIProvider(api_key=cfg.openai_api_key)
-        )
-    elif name == "anthropic":
-        return (
-            AnthropicProvider(
-                model=model,
-                api_key=cfg.anthropic_api_key,
-            )
-            if model
-            else AnthropicProvider(api_key=cfg.anthropic_api_key)
-        )
-    else:
-        return None
+    if name not in PROVIDERS:
+        raise ValueError(f"unknown provider: {name}")
+    cls, key_field = PROVIDERS[name]
+    kwargs = {"api_key": getattr(cfg, key_field)}
+    if model:
+        kwargs["model"] = model
+    return cls(**kwargs)
 
 
 async def _run(
@@ -165,9 +159,6 @@ def main(
     # pick provider
     try:
         llm = _make_provider(prov, mdl, cfg)
-        if llm is None:
-            console.print(f"unknown provider: {prov}", style="red")
-            raise typer.Exit(2)
     except ValueError as e:
         _fail(f"error: {e}", debug=debug)
 
@@ -196,7 +187,7 @@ def main(
         except ValueError as e:
             _fail(f"error: {e}", debug=debug)
         except Exception as e:
-            _fail(f"review failed: {e}", debug=debug)
+            _fail(f"error: review failed: {e}", debug=debug)
     else:
         try:
             diff = get_diff(
@@ -213,7 +204,7 @@ def main(
                 review_diff(llm, diff, max_items=cfg.max_items),
             )
         except Exception as e:
-            _fail(f"review failed: {e}", debug=debug)
+            _fail(f"error: review failed: {e}", debug=debug)
 
     # count files in the diff for the header. only header lines count,
     # added content can legitimately contain the same text

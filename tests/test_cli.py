@@ -95,7 +95,7 @@ class TestDebug:
         mock_review.side_effect = RuntimeError("boom")
         result = runner.invoke(app, ["."])
         assert result.exit_code == 2
-        assert "review failed: boom" in result.output
+        assert "error: review failed: boom" in result.output
 
 
 class TestFileCount:
@@ -233,7 +233,7 @@ class TestProviderRouting:
         mock_config.return_value = _mock_config(provider="gemini")
         result = runner.invoke(app, ["."])
         assert result.exit_code == 2
-        assert "unknown provider" in result.output
+        assert "error: unknown provider: gemini" in result.output
 
 
 class TestGitHubUrl:
