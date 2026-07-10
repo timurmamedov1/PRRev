@@ -95,6 +95,55 @@ class TestIsGithubUrl:
         assert _is_github_url("https://gitlab.com/user/repo/pull/1") is False
 
 
+class TestRetry:
+    def _client_with(self, responses):
+        mock_client = patch("prrev.github.httpx.AsyncClient").start()
+        ctx = AsyncMock()
+        ctx.post = AsyncMock(side_effect=responses)
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+        return ctx
+
+    def teardown_method(self):
+        patch.stopall()
+
+    async def test_retries_500_then_succeeds(self):
+        req = httpx.Request("POST", "https://api.github.com/x")
+        flaky = httpx.Response(500, request=req, headers={"retry-after": "0"})
+        ok = AsyncMock()
+        ok.status_code = 200
+        ok.raise_for_status = lambda: None
+
+        ctx = self._client_with([flaky, ok])
+        await post_review("o", "r", 1, "body", "tok", items=None)
+        assert ctx.post.call_count == 2
+
+    async def test_retries_403_rate_limit(self):
+        req = httpx.Request("POST", "https://api.github.com/x")
+        limited = httpx.Response(
+            403,
+            request=req,
+            headers={"retry-after": "0"},
+            json={"message": "API rate limit exceeded for user"},
+        )
+        ok = AsyncMock()
+        ok.status_code = 200
+        ok.raise_for_status = lambda: None
+
+        ctx = self._client_with([limited, ok])
+        await post_review("o", "r", 1, "body", "tok", items=None)
+        assert ctx.post.call_count == 2
+
+    async def test_gives_up_after_max_retries(self):
+        req = httpx.Request("POST", "https://api.github.com/x")
+        down = httpx.Response(500, request=req, headers={"retry-after": "0"})
+
+        ctx = self._client_with([down, down, down])
+        with pytest.raises(httpx.HTTPStatusError):
+            await post_review("o", "r", 1, "body", "tok", items=None)
+        assert ctx.post.call_count == 3  # first try + MAX_RETRIES
+
+
 class TestPostReview:
     async def test_inline_comments_posted(self):
         items = [

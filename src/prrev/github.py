@@ -1,5 +1,6 @@
 # github api, fetch pr diffs and post review comments
 
+import asyncio
 import re
 from dataclasses import dataclass
 
@@ -7,6 +8,30 @@ import httpx
 
 API_BASE = "https://api.github.com"
 REQUEST_TIMEOUT = 30.0
+
+# transient statuses worth a second try
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_RETRIES = 2
+
+
+async def _with_retry(send):
+    # send is a coroutine factory so every attempt is a fresh request.
+    # retries transient 5xx and rate limits, honoring retry-after
+    resp = await send()
+    for _ in range(MAX_RETRIES):
+        retryable = resp.status_code in RETRY_STATUSES or (
+            resp.status_code == 403 and "rate limit" in resp.text.lower()
+        )
+        if not retryable:
+            return resp
+        try:
+            delay = min(float(resp.headers.get("retry-after", "")), 30)
+        except ValueError:
+            delay = 1.0
+        await asyncio.sleep(delay)
+        resp = await send()
+    return resp
+
 
 # matches urls like https://github.com/owner/repo/pull/42
 PR_URL_PATTERN = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
@@ -63,14 +88,16 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
         timeout=REQUEST_TIMEOUT,
     ) as client:
         # get pr metadata
-        resp = await client.get(f"/repos/{owner}/{repo}/pulls/{number}")
+        resp = await _with_retry(lambda: client.get(f"/repos/{owner}/{repo}/pulls/{number}"))
         _raise_for_status(resp)
         pr_data = resp.json()
 
         # get the full diff using the diff accept header
-        diff_resp = await client.get(
-            f"/repos/{owner}/{repo}/pulls/{number}",
-            headers={"Accept": "application/vnd.github.v3.diff"},
+        diff_resp = await _with_retry(
+            lambda: client.get(
+                f"/repos/{owner}/{repo}/pulls/{number}",
+                headers={"Accept": "application/vnd.github.v3.diff"},
+            )
         )
         _raise_for_status(diff_resp)
 
@@ -126,9 +153,11 @@ async def post_review(
         follow_redirects=True,
         timeout=REQUEST_TIMEOUT,
     ) as client:
-        resp = await client.post(
-            f"/repos/{owner}/{repo}/pulls/{number}/reviews",
-            json=payload,
+        resp = await _with_retry(
+            lambda: client.post(
+                f"/repos/{owner}/{repo}/pulls/{number}/reviews",
+                json=payload,
+            )
         )
 
         # github rejects the whole review if any inline comment targets a
@@ -142,9 +171,11 @@ async def post_review(
                 "body": "\n".join(fallback_lines),
                 "event": "COMMENT",
             }
-            resp = await client.post(
-                f"/repos/{owner}/{repo}/pulls/{number}/reviews",
-                json=payload,
+            resp = await _with_retry(
+                lambda: client.post(
+                    f"/repos/{owner}/{repo}/pulls/{number}/reviews",
+                    json=payload,
+                )
             )
 
         _raise_for_status(resp)
