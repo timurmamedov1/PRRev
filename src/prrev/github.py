@@ -21,6 +21,28 @@ class PRInfo:
     diff: str
 
 
+def _raise_for_status(resp: httpx.Response) -> None:
+    # githubs error body says exactly what was rejected, keep it in the message
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        detail = ""
+        try:
+            data = resp.json()
+            detail = str(data.get("message", ""))
+            if data.get("errors"):
+                detail += f" {data['errors']}"
+        except Exception:
+            pass
+        if detail.strip():
+            raise httpx.HTTPStatusError(
+                f"{e} ({detail.strip()})",
+                request=e.request,
+                response=e.response,
+            ) from None
+        raise
+
+
 def parse_pr_url(url: str) -> tuple[str, str, int]:
     match = PR_URL_PATTERN.match(url)
     if not match:
@@ -42,7 +64,7 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
     ) as client:
         # get pr metadata
         resp = await client.get(f"/repos/{owner}/{repo}/pulls/{number}")
-        resp.raise_for_status()
+        _raise_for_status(resp)
         pr_data = resp.json()
 
         # get the full diff using the diff accept header
@@ -50,7 +72,7 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
             f"/repos/{owner}/{repo}/pulls/{number}",
             headers={"Accept": "application/vnd.github.v3.diff"},
         )
-        diff_resp.raise_for_status()
+        _raise_for_status(diff_resp)
 
     return PRInfo(
         owner=owner,
@@ -125,4 +147,4 @@ async def post_review(
                 json=payload,
             )
 
-        resp.raise_for_status()
+        _raise_for_status(resp)

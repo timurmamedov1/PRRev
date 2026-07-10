@@ -178,6 +178,27 @@ class TestPostReview:
             payload = ctx.post.call_args[1]["json"]
             assert payload["comments"][0]["side"] == "LEFT"
 
+    async def test_github_error_body_lands_in_message(self):
+        # githubs json error detail should surface in the raised error
+        req = httpx.Request("POST", "https://api.github.com/repos/o/r/pulls/1/reviews")
+        resp = httpx.Response(
+            422,
+            request=req,
+            json={
+                "message": "Validation Failed",
+                "errors": [{"resource": "PullRequestReview", "field": "line"}],
+            },
+        )
+
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
+            ctx = AsyncMock()
+            ctx.post = AsyncMock(return_value=resp)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            with pytest.raises(httpx.HTTPStatusError, match="Validation Failed"):
+                await post_review("o", "r", 1, "body", "tok", items=None)
+
     async def test_no_fallback_without_comments(self):
         # 422 without comments shouldnt retry, just raise
         rejected = AsyncMock()
