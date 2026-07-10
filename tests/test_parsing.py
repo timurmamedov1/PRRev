@@ -36,6 +36,22 @@ class TestParsePrUrl:
         with pytest.raises(ValueError):
             parse_pr_url("")
 
+    def test_repo_with_dots_ok(self):
+        owner, repo, number = parse_pr_url("https://github.com/user/my.repo/pull/2")
+        assert repo == "my.repo"
+
+    def test_owner_with_traversal_rejected(self):
+        with pytest.raises(ValueError, match="invalid github PR url"):
+            parse_pr_url("https://github.com/../repo/pull/1")
+
+    def test_repo_dotdot_rejected(self):
+        with pytest.raises(ValueError, match="invalid github PR url"):
+            parse_pr_url("https://github.com/user/../pull/1")
+
+    def test_percent_encoded_rejected(self):
+        with pytest.raises(ValueError, match="invalid github PR url"):
+            parse_pr_url("https://github.com/user/repo%2Fother/pull/1")
+
 
 class TestSplitByFile:
     def test_single_file(self):

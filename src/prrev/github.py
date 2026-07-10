@@ -33,8 +33,10 @@ async def _with_retry(send):
     return resp
 
 
-# matches urls like https://github.com/owner/repo/pull/42
-PR_URL_PATTERN = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
+# matches urls like https://github.com/owner/repo/pull/42.
+# owner and repo stick to githubs name charset so a crafted url cant
+# steer the api path (dots, encoded slashes etc)
+PR_URL_PATTERN = re.compile(r"https://github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)")
 
 
 @dataclass
@@ -72,7 +74,11 @@ def parse_pr_url(url: str) -> tuple[str, str, int]:
     match = PR_URL_PATTERN.match(url)
     if not match:
         raise ValueError(f"invalid github PR url: {url}")
-    return match.group(1), match.group(2), int(match.group(3))
+    repo = match.group(2)
+    # dot-only names are valid for the charset but rewrite the api path
+    if repo in {".", ".."}:
+        raise ValueError(f"invalid github PR url: {url}")
+    return match.group(1), repo, int(match.group(3))
 
 
 async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
