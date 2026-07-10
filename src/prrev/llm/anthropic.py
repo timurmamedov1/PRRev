@@ -90,7 +90,8 @@ class AnthropicProvider(LLMProvider):
     async def review(self, diff: str) -> ReviewResult:
         response = await self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            # ceiling, not a target. dense chunks can produce long reviews
+            max_tokens=16_000,
             system=SYSTEM_PROMPT,
             tools=[REVIEW_TOOL],
             # force the model to use our tool
