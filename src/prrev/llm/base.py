@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class ReviewItem:
     severity: str  # "critical" | "warning" | "suggestion"
     file: str
-    line: int | None  # new-file line number (right side of diff)
+    line: int | None  # new-file line for side=RIGHT, old-file line for side=LEFT
     summary: str
     explanation: str
     side: str = "RIGHT"  # RIGHT for additions, LEFT for deletions

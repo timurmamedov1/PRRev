@@ -34,7 +34,11 @@ REVIEW_SCHEMA = {
                         },
                         "line": {
                             "type": ["integer", "null"],
-                            "description": "new-file line number, or null if not identifiable",
+                            "description": (
+                                "line number in the NEW file for side=RIGHT; for deleted "
+                                "lines (side=LEFT) the line number in the OLD file; null "
+                                "if not identifiable"
+                            ),
                         },
                         "summary": {
                             "type": "string",
