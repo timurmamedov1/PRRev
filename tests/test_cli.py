@@ -244,6 +244,36 @@ class TestGitHubUrl:
         assert result.exit_code == 2
         assert "GITHUB_TOKEN" in result.output
 
+    @patch("prrev.cli.post_review", new_callable=AsyncMock)
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.fetch_pr", new_callable=AsyncMock)
+    @patch("prrev.cli.load_config")
+    def test_body_excludes_inline_items(self, mock_config, mock_fetch, mock_review, mock_post):
+        # located items go inline, the body carries only unplaceable ones
+        mock_config.return_value = _mock_config(github_token="tok")
+        mock_fetch.return_value = MagicMock(number=1, title="t", diff="diff --git a/x b/x\n")
+        inline = ReviewItem(
+            severity="warning",
+            file="app.py",
+            line=5,
+            summary="inline finding",
+            explanation="on a line",
+        )
+        unplaced = ReviewItem(
+            severity="suggestion",
+            file="app.py",
+            line=None,
+            summary="general finding",
+            explanation="no line",
+        )
+        mock_review.return_value = ReviewResult(items=[inline, unplaced], summary="sum")
+        result = runner.invoke(app, ["https://github.com/user/repo/pull/1", "--post"])
+        assert result.exit_code == 0
+        body = mock_post.call_args.args[3]
+        assert "general finding" in body
+        assert "inline finding" not in body
+        assert len(mock_post.call_args.kwargs["items"]) == 2
+
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)
     @patch("prrev.cli.fetch_pr", new_callable=AsyncMock)
     @patch("prrev.cli.load_config")

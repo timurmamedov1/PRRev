@@ -12,6 +12,7 @@ from prrev.formatter import print_review, to_markdown
 from prrev.git import find_repo_root, get_diff
 from prrev.github import fetch_pr, parse_pr_url, post_review
 from prrev.llm.anthropic import AnthropicProvider
+from prrev.llm.base import ReviewResult
 from prrev.llm.openai import OpenAIProvider
 from prrev.reviewer import review_diff
 
@@ -85,7 +86,10 @@ async def _run(
             }
             for i in result.items
         ]
-        body = to_markdown(result)
+        # located items become inline comments, so the body only carries the
+        # summary plus items that cant be placed on a line
+        body_items = [i for i in result.items if not (i.file and i.line)]
+        body = to_markdown(ReviewResult(items=body_items, summary=result.summary))
         await post_review(
             owner,
             repo,
