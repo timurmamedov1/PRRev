@@ -131,6 +131,28 @@ class TestInvalidConfig:
         with pytest.raises(ValueError, match="max_items"):
             load_config(repo_path=str(tmp_path))
 
+    def test_zero_toml_max_items_rejected(self, tmp_path):
+        toml_file = tmp_path / ".prrev.toml"
+        toml_file.write_text("[review]\nmax_items = 0\n")
+        with pytest.raises(ValueError, match="positive"):
+            load_config(repo_path=str(tmp_path))
+
+    def test_zero_env_max_items_rejected(self):
+        env = {"PRREV_MAX_ITEMS": "0"}
+        with (
+            patch.dict(os.environ, env, clear=False),
+            pytest.raises(ValueError, match="positive"),
+        ):
+            load_config()
+
+    def test_empty_provider_surfaces_instead_of_falling_back(self, tmp_path):
+        # empty string reaches the provider check and errors there, rather
+        # than silently reverting to the default provider
+        toml_file = tmp_path / ".prrev.toml"
+        toml_file.write_text('[llm]\nprovider = ""\n')
+        cfg = load_config(repo_path=str(tmp_path))
+        assert cfg.provider == ""
+
     def test_malformed_toml_raises(self, tmp_path):
         # TOMLDecodeError subclasses ValueError so the cli catch covers it
         toml_file = tmp_path / ".prrev.toml"
