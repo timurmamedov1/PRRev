@@ -78,11 +78,24 @@ SYSTEM_PROMPT = (
 )
 
 
-class AnthropicProvider(LLMProvider):
-    max_input_tokens = 180_000  # claude sonnet/opus context is 200k, leave room for output
+# context windows: sonnet 5 / opus 4.6+ / fable take 1m input tokens,
+# haiku 4.5 takes 200k. limits leave room for output and message framing,
+# unknown models get the conservative 200k-window figure
+MODEL_INPUT_LIMITS = {
+    "claude-fable-5": 800_000,
+    "claude-sonnet-5": 800_000,
+    "claude-opus-4-8": 800_000,
+    "claude-opus-4-7": 800_000,
+    "claude-opus-4-6": 800_000,
+    "claude-haiku-4-5": 160_000,
+}
+DEFAULT_INPUT_LIMIT = 160_000
 
+
+class AnthropicProvider(LLMProvider):
     def __init__(self, model: str = "claude-sonnet-5", api_key: str | None = None):
         self.model = model
+        self.max_input_tokens = MODEL_INPUT_LIMITS.get(model, DEFAULT_INPUT_LIMIT)
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             raise ValueError("ANTHROPIC_API_KEY not set")

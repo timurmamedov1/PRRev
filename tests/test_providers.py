@@ -69,6 +69,18 @@ class TestAnthropicProvider:
         assert result.items[0].file == "app.py"
         assert result.items[0].line == 10
 
+    def test_1m_window_model_gets_high_limit(self):
+        provider = AnthropicProvider(model="claude-sonnet-5", api_key="sk-test-123")
+        assert provider.max_input_tokens == 800_000
+
+    def test_haiku_stays_under_its_smaller_window(self):
+        provider = AnthropicProvider(model="claude-haiku-4-5", api_key="sk-test-123")
+        assert provider.max_input_tokens == 160_000
+
+    def test_unknown_model_gets_conservative_default(self):
+        provider = AnthropicProvider(model="claude-brand-new", api_key="sk-test-123")
+        assert provider.max_input_tokens == 160_000
+
     @pytest.mark.asyncio
     async def test_count_tokens_uses_async_client(self):
         provider = AnthropicProvider(api_key="sk-test-123")
