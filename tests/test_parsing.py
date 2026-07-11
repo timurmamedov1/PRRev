@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from prrev.cli import _is_github_url
-from prrev.github import _neutralize_mentions, parse_pr_url, post_review
+from prrev.github import _neutralize_mentions, fetch_pr, parse_pr_url, post_review
 from prrev.reviewer import _split_by_file
 
 
@@ -109,6 +109,24 @@ class TestIsGithubUrl:
 
     def test_other_host(self):
         assert _is_github_url("https://gitlab.com/user/repo/pull/1") is False
+
+
+class TestFetchPr:
+    async def test_fetches_metadata_and_diff(self):
+        req = httpx.Request("GET", "https://api.github.com/repos/o/r/pulls/7")
+        meta = httpx.Response(200, request=req, json={"title": "my pr"})
+        diff = httpx.Response(200, request=req, text="diff --git a/x b/x\n")
+
+        with patch("prrev.github.httpx.AsyncClient") as mock_client:
+            ctx = AsyncMock()
+            ctx.get = AsyncMock(side_effect=[meta, diff])
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=ctx)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            pr = await fetch_pr("o", "r", 7, "tok")
+            assert pr.title == "my pr"
+            assert pr.diff.startswith("diff --git")
+            assert ctx.get.call_count == 2
 
 
 class TestPostSanitization:

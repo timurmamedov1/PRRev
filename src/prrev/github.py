@@ -104,19 +104,20 @@ async def fetch_pr(owner: str, repo: str, number: int, token: str) -> PRInfo:
         follow_redirects=True,
         timeout=REQUEST_TIMEOUT,
     ) as client:
-        # get pr metadata
-        resp = await _with_retry(lambda: client.get(f"/repos/{owner}/{repo}/pulls/{number}"))
-        _raise_for_status(resp)
-        pr_data = resp.json()
-
-        # get the full diff using the diff accept header
-        diff_resp = await _with_retry(
-            lambda: client.get(
-                f"/repos/{owner}/{repo}/pulls/{number}",
-                headers={"Accept": "application/vnd.github.v3.diff"},
-            )
+        # metadata and the diff (via the diff accept header) are independent,
+        # fetch both at once
+        resp, diff_resp = await asyncio.gather(
+            _with_retry(lambda: client.get(f"/repos/{owner}/{repo}/pulls/{number}")),
+            _with_retry(
+                lambda: client.get(
+                    f"/repos/{owner}/{repo}/pulls/{number}",
+                    headers={"Accept": "application/vnd.github.v3.diff"},
+                )
+            ),
         )
+        _raise_for_status(resp)
         _raise_for_status(diff_resp)
+        pr_data = resp.json()
 
     return PRInfo(
         owner=owner,
