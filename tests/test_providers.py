@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from prrev.llm.anthropic import AnthropicProvider
+from prrev.llm.anthropic import REVIEW_TOOL, AnthropicProvider
 from prrev.llm.openai import REVIEW_SCHEMA, OpenAIProvider
 
 
@@ -68,6 +68,34 @@ class TestAnthropicProvider:
         assert result.items[0].severity == "warning"
         assert result.items[0].file == "app.py"
         assert result.items[0].line == 10
+
+    @pytest.mark.asyncio
+    async def test_malformed_item_skipped_with_notice(self):
+        provider = AnthropicProvider(api_key="sk-test-123")
+
+        tool_block = MagicMock()
+        tool_block.type = "tool_use"
+        tool_block.name = "submit_review"
+        tool_block.input = {
+            "summary": "ok",
+            "items": [
+                {"severity": "warning"},  # missing required fields
+                SAMPLE_REVIEW["items"][0],
+            ],
+        }
+
+        mock_response = MagicMock()
+        mock_response.content = [tool_block]
+        mock_response.stop_reason = "tool_use"
+
+        provider.client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await provider.review("diff content")
+        real = [i for i in result.items if not i.notice]
+        notices = [i for i in result.items if i.notice]
+        assert len(real) == 1
+        assert len(notices) == 1
+        assert "malformed" in notices[0].summary
 
     @pytest.mark.asyncio
     async def test_no_tool_call_raises(self):
@@ -222,6 +250,16 @@ class TestSchemaContract:
 
     def test_openai_objects_require_all_properties(self):
         objects = list(_walk_schema_objects(REVIEW_SCHEMA["schema"]))
+        assert objects, "expected at least one object node in the schema"
+        for obj in objects:
+            assert obj.get("additionalProperties") is False
+            assert set(obj.get("required", [])) == set(obj["properties"])
+
+    def test_anthropic_tool_is_strict(self):
+        assert REVIEW_TOOL["strict"] is True
+
+    def test_anthropic_objects_require_all_properties(self):
+        objects = list(_walk_schema_objects(REVIEW_TOOL["input_schema"]))
         assert objects, "expected at least one object node in the schema"
         for obj in objects:
             assert obj.get("additionalProperties") is False

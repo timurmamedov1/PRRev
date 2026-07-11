@@ -12,6 +12,9 @@ from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
 REVIEW_TOOL = {
     "name": "submit_review",
     "description": "Submit a structured code review.",
+    # strict mode has the api validate tool input against the schema, so
+    # every object needs additionalProperties false and a full required list
+    "strict": True,
     "input_schema": {
         "type": "object",
         "properties": {
@@ -54,11 +57,13 @@ REVIEW_TOOL = {
                             "description": "RIGHT for additions/modified lines, LEFT for deletions",
                         },
                     },
-                    "required": ["severity", "file", "line", "summary", "explanation"],
+                    "required": ["severity", "file", "line", "summary", "explanation", "side"],
+                    "additionalProperties": False,
                 },
             },
         },
         "required": ["summary", "items"],
+        "additionalProperties": False,
     },
 }
 
@@ -111,17 +116,35 @@ class AnthropicProvider(LLMProvider):
         for block in response.content:
             if block.type == "tool_use" and block.name == "submit_review":
                 data = block.input
-                items = [
-                    ReviewItem(
-                        severity=item["severity"],
-                        file=item["file"],
-                        line=item.get("line"),
-                        summary=item["summary"],
-                        explanation=item["explanation"],
-                        side=item.get("side", "RIGHT"),
+                items = []
+                malformed = 0
+                for item in data.get("items", []):
+                    # strict mode should guarantee the shape, but a dropped
+                    # item beats a crashed review if something slips through
+                    try:
+                        items.append(
+                            ReviewItem(
+                                severity=item["severity"],
+                                file=item["file"],
+                                line=item.get("line"),
+                                summary=item["summary"],
+                                explanation=item["explanation"],
+                                side=item.get("side", "RIGHT"),
+                            )
+                        )
+                    except (KeyError, TypeError):
+                        malformed += 1
+                if malformed:
+                    items.append(
+                        ReviewItem(
+                            severity="warning",
+                            file="model response",
+                            line=None,
+                            summary=f"skipped {malformed} malformed review item(s)",
+                            explanation="the model returned items missing required fields.",
+                            notice=True,
+                        )
                     )
-                    for item in data.get("items", [])
-                ]
                 return ReviewResult(items=items, summary=data.get("summary", ""))
 
         raise RuntimeError("model did not call submit_review tool")
