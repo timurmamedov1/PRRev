@@ -1,7 +1,7 @@
 [project]
 name = "prrev"
 dynamic = ["version"]
-description = "CLI tool that reviews code diffs using LLMs"
+description = "A CLI tool that reviews code diffs using LLMs."
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Timur Mamedov", email = "tm412421@gmail.com" }]
