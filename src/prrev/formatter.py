@@ -61,7 +61,7 @@ def to_markdown(result: ReviewResult) -> str:
         lines.append("No issues found.\n")
     else:
         for item in result.items:
-            color, label = SEVERITY_STYLES.get(item.severity, ("white", item.severity.upper()))
+            _, label = SEVERITY_STYLES.get(item.severity, ("white", item.severity.upper()))
             location = item.file
             if item.line is not None:
                 location += f":{item.line}"

@@ -123,8 +123,8 @@ def main(
     ),
     debug: bool = typer.Option(False, help="Show full tracebacks instead of short errors"),
 ) -> None:
-    # validate --fail-on early
-    valid_severities = {"critical", "warning", "suggestion"}
+    # validate --fail-on early. tuple keeps the error message order stable
+    valid_severities = ("critical", "warning", "suggestion")
     if fail_on and fail_on not in valid_severities:
         msg = f"error: --fail-on must be one of: {', '.join(valid_severities)}"
         console.print(msg, style="red")

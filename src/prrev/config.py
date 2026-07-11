@@ -3,17 +3,14 @@
 # tokens only from env vars or global config, never repo config (security)
 
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
+try:
     import tomllib
-else:
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib
+except ImportError:
+    # py310, tomllib landed in the stdlib in 3.11
+    import tomli as tomllib
 
 GLOBAL_CONFIG_PATH = Path.home() / ".config" / "prrev" / "config.toml"
 REPO_CONFIG_NAME = ".prrev.toml"
