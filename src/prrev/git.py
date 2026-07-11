@@ -3,6 +3,9 @@
 from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Repo
 from gitdb.exc import BadName, BadObject
 
+# sha of gits empty tree object, identical in every repository
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 
 def find_repo_root(path: str) -> str | None:
     # walk up from path to the working tree root. config and diffs both
@@ -42,9 +45,8 @@ def get_diff(
             raise ValueError(f"unknown commit: {commit}") from None
         if commit_obj.parents:
             return repo.git.diff(commit_obj.parents[0].hexsha, commit_obj.hexsha)
-        # root commit, diff against empty tree
-        empty_tree = repo.git.hash_object("-t", "tree", "/dev/null")
-        return repo.git.diff(empty_tree, commit_obj.hexsha)
+        # root commit, diff against the empty tree
+        return repo.git.diff(EMPTY_TREE_SHA, commit_obj.hexsha)
 
     # commit range like abc123..def456. reject dash-prefixed values and pass
     # --end-of-options so git cant interpret the range as a flag like
