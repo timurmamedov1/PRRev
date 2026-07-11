@@ -31,6 +31,11 @@ class TestUncommittedChanges:
         with pytest.raises(ValueError, match="no changes found"):
             get_diff(str(git_repo))
 
+    def test_untracked_files_mentioned_when_no_diff(self, git_repo):
+        (git_repo / "brand_new.txt").write_text("hi\n")
+        with pytest.raises(ValueError, match="1 untracked"):
+            get_diff(str(git_repo))
+
     def test_detects_new_untracked_staged_file(self, git_repo):
         new = git_repo / "new.txt"
         new.write_text("new file\n")

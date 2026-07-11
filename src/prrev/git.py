@@ -71,6 +71,14 @@ def get_diff(
     diff = repo.git.diff("HEAD") if repo.head.is_valid() else repo.git.diff("--cached")
 
     if not diff:
+        # untracked files never show up in the diff until theyre staged,
+        # so point at them instead of claiming nothing exists
+        untracked = repo.untracked_files
+        if untracked:
+            raise ValueError(
+                f"no changes found ({len(untracked)} untracked file(s) not included, "
+                "stage them with git add to review)"
+            )
         raise ValueError("no changes found")
 
     return diff
