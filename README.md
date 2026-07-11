@@ -1,5 +1,8 @@
 # PRRev
 
+[![tests](https://github.com/timurmamedov1/PRRev/actions/workflows/tests.yml/badge.svg)](https://github.com/timurmamedov1/PRRev/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/prrev)](https://pypi.org/project/prrev/)
+
 A CLI tool that reviews code diffs using LLMs. Point it at a local repo or a GitHub PR URL. It sends the diff to Claude or GPT-4o and outputs a structured review with severity ratings, file references, and line numbers.
 
 ## Install
@@ -36,7 +39,12 @@ prrev . --output review.md
 
 # fail in CI if there are warnings or worse
 prrev . --fail-on warning
+
+# show full tracebacks instead of short errors
+prrev . --debug
 ```
+
+Note: brand-new files don't appear in the diff until you `git add` them — PRRev will tell you when untracked files are being left out.
 
 ## Configuration
 
@@ -116,6 +124,8 @@ For large diffs, PRRev automatically chunks by file based on actual token counts
 - `0:` review completed, no issues at or above `--fail-on` threshold
 - `1:` issues found at or above `--fail-on` threshold
 - `2:` tool error (missing API key, invalid args, network failure)
+
+Tool notices (a file skipped for size, a failed chunk) render as warnings but never count toward `--fail-on`, so CI fails only on real findings.
 
 ## Tech Stack
 
