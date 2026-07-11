@@ -85,7 +85,8 @@ class OpenAIProvider(LLMProvider):
             raise ValueError("OPENAI_API_KEY not set")
         self.client = openai.AsyncOpenAI(api_key=key)
 
-    def count_tokens(self, text: str) -> int:
+    async def count_tokens(self, text: str) -> int:
+        # local tiktoken count, async only to match the provider interface
         try:
             enc = tiktoken.encoding_for_model(self.model)
         except KeyError:

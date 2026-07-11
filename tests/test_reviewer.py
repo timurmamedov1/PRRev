@@ -23,7 +23,7 @@ class FakeProvider(LLMProvider):
         self.in_flight = 0
         self.max_in_flight = 0
 
-    def count_tokens(self, text: str) -> int:
+    async def count_tokens(self, text: str) -> int:
         self.count_tokens_calls += 1
         if self._count_by_length:
             return len(text)

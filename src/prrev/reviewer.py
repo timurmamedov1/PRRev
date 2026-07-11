@@ -62,8 +62,8 @@ async def review_diff(
     # utf-8 byte count is a safe upper bound on tokens bc tokenizers use
     # byte-level bpe, no token encodes less than 1 byte. when the diff
     # clearly fits we can skip the count_tokens call, which for anthropic
-    # is a blocking network round-trip on every review
-    if _byte_len(diff) <= threshold or provider.count_tokens(diff) <= threshold:
+    # is a network round-trip on every review
+    if _byte_len(diff) <= threshold or (await provider.count_tokens(diff)) <= threshold:
         result = await provider.review(diff)
         return _truncate(result, max_items)
 
@@ -76,7 +76,7 @@ async def review_diff(
     reviewable = []
     skipped_files = []
     for chunk in file_diffs:
-        if _byte_len(chunk) > threshold and provider.count_tokens(chunk) > threshold:
+        if _byte_len(chunk) > threshold and (await provider.count_tokens(chunk)) > threshold:
             skipped_files.append(_path_from_header(chunk.split("\n", 1)[0]))
         else:
             reviewable.append(chunk)

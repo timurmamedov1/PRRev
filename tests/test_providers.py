@@ -70,6 +70,14 @@ class TestAnthropicProvider:
         assert result.items[0].line == 10
 
     @pytest.mark.asyncio
+    async def test_count_tokens_uses_async_client(self):
+        provider = AnthropicProvider(api_key="sk-test-123")
+        provider.client.messages.count_tokens = AsyncMock(
+            return_value=MagicMock(input_tokens=42),
+        )
+        assert await provider.count_tokens("some diff") == 42
+
+    @pytest.mark.asyncio
     async def test_malformed_item_skipped_with_notice(self):
         provider = AnthropicProvider(api_key="sk-test-123")
 
@@ -234,9 +242,10 @@ class TestOpenAIProvider:
         assert len(result.items) == 0
         assert result.summary == "all good"
 
-    def test_count_tokens(self):
+    @pytest.mark.asyncio
+    async def test_count_tokens(self):
         provider = OpenAIProvider(api_key="sk-test-123")
-        count = provider.count_tokens("hello world")
+        count = await provider.count_tokens("hello world")
         assert isinstance(count, int)
         assert count > 0
 
