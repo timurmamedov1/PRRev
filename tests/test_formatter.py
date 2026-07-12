@@ -104,6 +104,18 @@ class TestFormatItem:
         assert "here is why" in plain
 
 
+class TestPrintReview:
+    def test_renders_items_and_file_count(self, monkeypatch):
+        buf = io.StringIO()
+        monkeypatch.setattr(fmt, "console", Console(file=buf, force_terminal=True))
+        result = ReviewResult(items=[_item("critical")], summary="one bad thing")
+        print_review(result, file_count=2)
+        out = buf.getvalue()
+        assert "Reviewed 2 files" in out
+        assert "CRITICAL" in out
+        assert "one bad thing" in out
+
+
 class TestPrintReviewMarkupSafety:
     def test_summary_with_markup_like_text_does_not_raise(self, monkeypatch):
         # llm-produced summary can contain [/tag]-shaped substrings that

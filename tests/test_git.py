@@ -133,6 +133,20 @@ class TestRepoRoot:
         assert find_repo_root(str(tmp_path)) is None
 
 
+class TestEdgeRepos:
+    def test_bare_repo_rejected(self, tmp_path):
+        Repo.init(tmp_path / "bare.git", bare=True)
+        with pytest.raises(ValueError, match="bare repository"):
+            get_diff(str(tmp_path / "bare.git"))
+
+    def test_repo_without_commits_uses_staged_diff(self, tmp_path):
+        repo = Repo.init(tmp_path)
+        (tmp_path / "new.txt").write_text("staged before first commit\n")
+        repo.index.add(["new.txt"])
+        diff = get_diff(str(tmp_path))
+        assert "staged before first commit" in diff
+
+
 class TestErrors:
     def test_not_a_repo(self, tmp_path):
         with pytest.raises(ValueError, match="not a git repository"):

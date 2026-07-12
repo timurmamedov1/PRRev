@@ -161,6 +161,32 @@ class TestInvalidConfig:
             load_config(repo_path=str(tmp_path))
 
 
+class TestPrecedence:
+    def test_env_overrides_repo_config(self, tmp_path):
+        (tmp_path / ".prrev.toml").write_text('[llm]\nprovider = "openai"\n')
+        with patch.dict(os.environ, {"PRREV_PROVIDER": "anthropic"}, clear=False):
+            cfg = load_config(repo_path=str(tmp_path))
+        assert cfg.provider == "anthropic"
+
+    def test_global_config_loads_tokens_and_settings(self, tmp_path, monkeypatch):
+        global_toml = tmp_path / "global.toml"
+        global_toml.write_text('[github]\ntoken = "ghp_global"\n[llm]\nprovider = "openai"\n')
+        monkeypatch.setattr(config_mod, "GLOBAL_CONFIG_PATH", global_toml)
+        cfg = load_config()
+        assert cfg.github_token == "ghp_global"
+        assert cfg.provider == "openai"
+
+    def test_repo_config_overrides_global(self, tmp_path, monkeypatch):
+        global_toml = tmp_path / "global.toml"
+        global_toml.write_text('[llm]\nprovider = "openai"\n')
+        monkeypatch.setattr(config_mod, "GLOBAL_CONFIG_PATH", global_toml)
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / ".prrev.toml").write_text('[llm]\nprovider = "anthropic"\n')
+        cfg = load_config(repo_path=str(repo))
+        assert cfg.provider == "anthropic"
+
+
 class TestLoadConfig:
     def test_missing_toml_returns_defaults(self):
         cfg = load_config(repo_path="/nonexistent/path")

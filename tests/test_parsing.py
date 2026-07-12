@@ -1,6 +1,6 @@
 # tests for url parsing, diff splitting, github url detection, and review posting
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -326,6 +326,8 @@ class TestPostReview:
         # 422 without comments shouldnt retry, just raise
         rejected = AsyncMock()
         rejected.status_code = 422
+        # sync json mock, an AsyncMock here would mint an unawaited coroutine
+        rejected.json = MagicMock(return_value={})
         rejected.raise_for_status = lambda: (_ for _ in ()).throw(
             httpx.HTTPStatusError(
                 "422",

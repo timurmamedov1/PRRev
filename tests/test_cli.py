@@ -227,6 +227,16 @@ class TestOutput:
         assert out.exists()
         assert "PRRev" in out.read_text()
 
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_missing_output_dir_exits_2(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config()
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["--output", "/nonexistent/dir/review.md", "."])
+        assert result.exit_code == 2
+        assert "directory does not exist" in result.output
+
 
 class TestProviderRouting:
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)
@@ -329,6 +339,33 @@ class TestEnsembleCli:
         result = runner.invoke(app, [".", "--model", "anthropic=claude-haiku-4-5"])
         assert result.exit_code == 2
         assert "only apply to --provider both" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_duplicate_bare_model_rejected(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--model", "a-model", "--model", "b-model"])
+        assert result.exit_code == 2
+        assert "pass --model once" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_mixed_model_forms_rejected(self, mock_config):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        result = runner.invoke(
+            app, [".", "--provider", "both", "--model", "anthropic=x", "--model", "bare"]
+        )
+        assert result.exit_code == 2
+        assert "dont mix" in result.output
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_config_model_reaches_the_provider(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(model="claude-haiku-4-5")
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        assert llm.model == "claude-haiku-4-5"
 
     @patch("prrev.cli.load_config")
     def test_unknown_judge_rejected(self, mock_config):
