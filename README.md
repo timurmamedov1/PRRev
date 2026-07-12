@@ -113,6 +113,23 @@ prrev . --provider anthropic --model claude-opus-4-8
 
 \* o1 models don't support structured output (`response_format`). Reviews may fail or return unparseable responses.
 
+### Ensemble mode
+
+Review with both providers at once and have one of them reconcile the results into a single review:
+
+```bash
+# both models review, claude reconciles (default judge)
+prrev . --provider both
+
+# pick the judge
+prrev . --provider both --judge openai
+
+# choose each provider's model
+prrev . --provider both --model anthropic=claude-haiku-4-5 --model openai=gpt-4o-mini
+```
+
+Findings flagged by both models are marked as higher confidence. If one provider fails, the review degrades to a single-model review with a notice instead of failing. Ensemble mode needs both API keys set and costs roughly double a single review, plus one reconciliation call per chunk.
+
 ## How It Works
 
 The diff is sent to the LLM using each provider's structured output mechanism: Anthropic's tool use and OpenAI's `response_format` with a JSON schema. This guarantees the response matches the expected structure at the API level without fragile JSON text parsing.
