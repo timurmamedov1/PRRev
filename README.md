@@ -44,7 +44,7 @@ prrev . --fail-on warning
 prrev . --debug
 ```
 
-Note: brand-new files don't appear in the diff until you `git add` them — PRRev will tell you when untracked files are being left out.
+Note: brand new files don't appear in the diff until you `git add` them. PRRev will tell you when untracked files are being left out.
 
 ## Configuration
 
