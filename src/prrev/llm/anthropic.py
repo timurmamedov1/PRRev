@@ -109,15 +109,19 @@ class AnthropicProvider(LLMProvider):
         return result.input_tokens
 
     async def review(self, diff: str) -> ReviewResult:
+        return await self._structured_call(SYSTEM_PROMPT, diff)
+
+    async def _structured_call(self, system: str, content: str) -> ReviewResult:
+        # one forced-tool call that comes back as a parsed ReviewResult
         response = await self.client.messages.create(
             model=self.model,
             # ceiling, not a target. dense chunks can produce long reviews
             max_tokens=16_000,
-            system=SYSTEM_PROMPT,
+            system=system,
             tools=[REVIEW_TOOL],
             # force the model to use our tool
             tool_choice={"type": "tool", "name": "submit_review"},
-            messages=[{"role": "user", "content": diff}],
+            messages=[{"role": "user", "content": content}],
         )
 
         if response.stop_reason not in ("tool_use", "end_turn"):

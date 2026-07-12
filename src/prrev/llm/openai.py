@@ -94,11 +94,15 @@ class OpenAIProvider(LLMProvider):
         return len(enc.encode(text))
 
     async def review(self, diff: str) -> ReviewResult:
+        return await self._structured_call(SYSTEM_PROMPT, diff)
+
+    async def _structured_call(self, system: str, content: str) -> ReviewResult:
+        # one schema-constrained call that comes back as a parsed ReviewResult
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": diff},
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
             ],
             response_format={
                 "type": "json_schema",
