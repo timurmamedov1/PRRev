@@ -34,6 +34,8 @@ def _mock_config(**overrides):
     defaults = dict(
         provider="anthropic",
         model=None,
+        anthropic_model=None,
+        openai_model=None,
         anthropic_api_key="sk-test",
         openai_api_key=None,
         github_token=None,
@@ -353,6 +355,68 @@ class TestEnsembleCli:
         result = runner.invoke(app, [".", "--model", "anthropic=claude-haiku-4-5"])
         assert result.exit_code == 2
         assert "only apply to --provider both" in result.output
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_config_per_provider_models_reach_ensemble(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(
+            provider="both",
+            openai_api_key="sk-oai",
+            anthropic_model="claude-haiku-4-5",
+            openai_model="gpt-4o-mini",
+        )
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        by_type = {type(p).__name__: p.model for p in llm.providers}
+        assert by_type["AnthropicProvider"] == "claude-haiku-4-5"
+        assert by_type["OpenAIProvider"] == "gpt-4o-mini"
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_cli_pair_overrides_config_model(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(
+            provider="both", openai_api_key="sk-oai", anthropic_model="claude-haiku-4-5"
+        )
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, [".", "--model", "anthropic=claude-opus-4-8"])
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        anthropic = next(p for p in llm.providers if type(p).__name__ == "AnthropicProvider")
+        assert anthropic.model == "claude-opus-4-8"
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_provider_model_beats_generic_in_single_mode(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(
+            provider="anthropic", model="claude-sonnet-5", anthropic_model="claude-haiku-4-5"
+        )
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 0
+        assert mock_review.call_args.args[0].model == "claude-haiku-4-5"
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_generic_model_with_both_warns(self, mock_config, mock_diff, mock_review):
+        # generic model differs from both defaults so leakage would show
+        mock_config.return_value = _mock_config(
+            provider="both", openai_api_key="sk-oai", model="claude-opus-4-8"
+        )
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, ["."])
+        assert result.exit_code == 0
+        assert "ignored with provider=both" in result.output
+        llm = mock_review.call_args.args[0]
+        # members kept their own defaults, generic model did not leak
+        by_type = {type(p).__name__: p.model for p in llm.providers}
+        assert by_type["AnthropicProvider"] == "claude-sonnet-5"
+        assert by_type["OpenAIProvider"] == "gpt-4o"
 
     @patch("prrev.cli.load_config")
     def test_duplicate_bare_model_rejected(self, mock_config):

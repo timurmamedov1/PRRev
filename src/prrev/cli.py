@@ -90,6 +90,24 @@ def _parse_models(values: list[str]) -> tuple[str | None, dict[str, str]]:
     return bare, per_provider
 
 
+def _resolve_models(prov: str, cli_bare: str | None, cli_map: dict[str, str], cfg) -> dict:
+    # per-provider model choice, most specific wins:
+    # cli pair > cli bare (single only) > config <provider>_model >
+    # config generic model (single only) > provider default (None)
+    names = ("anthropic", "openai") if prov == "both" else (prov,)
+    resolved: dict[str, str | None] = {}
+    for name in names:
+        model = cli_map.get(name)
+        if model is None and prov != "both":
+            model = cli_bare
+        if model is None:
+            model = getattr(cfg, f"{name}_model", None)
+        if model is None and prov != "both":
+            model = cfg.model
+        resolved[name] = model
+    return resolved
+
+
 async def _run(
     target: str,
     cfg,
@@ -235,17 +253,21 @@ def main(
     if prov != "both" and model_map:
         console.print("error: provider=model pairs only apply to --provider both", style="red")
         raise typer.Exit(2)
-    if bare_model is None and not model_map and cfg.model:
-        # config carries a single-provider model, ensemble members keep
-        # their own defaults
-        bare_model = cfg.model
+    # generic model cant apply in ensemble mode, say so instead of dropping it
+    if prov == "both" and cfg.model and not model_map:
+        console.print(
+            "note: [llm] model is ignored with provider=both, use anthropic_model / openai_model",
+            style="dim",
+        )
+
+    models = _resolve_models(prov, bare_model, model_map, cfg)
 
     # pick provider
     try:
         if prov == "both":
-            llm = _make_ensemble(model_map, cfg, judge)
+            llm = _make_ensemble(models, cfg, judge)
         else:
-            llm = _make_provider(prov, bare_model, cfg)
+            llm = _make_provider(prov, models.get(prov), cfg)
     except ValueError as e:
         _fail(f"error: {e}", debug=debug)
 
