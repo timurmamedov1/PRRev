@@ -29,3 +29,8 @@ class LLMProvider(ABC):
     # async bc counting can be a network call depending on the provider
     @abstractmethod
     async def count_tokens(self, text: str) -> int: ...
+
+    async def reconcile(self, reviews: list[ReviewResult]) -> ReviewResult:
+        # merge several reviews of the same diff into one, used by the
+        # ensemble judge. providers that can judge override this
+        raise NotImplementedError

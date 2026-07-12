@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from prrev.llm.anthropic import REVIEW_TOOL, AnthropicProvider
+from prrev.llm.base import LLMProvider, ReviewResult
 from prrev.llm.openai import REVIEW_SCHEMA, OpenAIProvider
 
 
@@ -260,6 +261,68 @@ class TestOpenAIProvider:
         count = await provider.count_tokens("hello world")
         assert isinstance(count, int)
         assert count > 0
+
+
+class TestReconcile:
+    def _anthropic_with_response(self):
+        provider = AnthropicProvider(api_key="sk-test-123")
+        tool_block = MagicMock()
+        tool_block.type = "tool_use"
+        tool_block.name = "submit_review"
+        tool_block.input = SAMPLE_REVIEW
+        mock_response = MagicMock()
+        mock_response.content = [tool_block]
+        mock_response.stop_reason = "tool_use"
+        provider.client.messages.create = AsyncMock(return_value=mock_response)
+        return provider
+
+    @pytest.mark.asyncio
+    async def test_anthropic_reconcile_sends_both_reviews_to_judge(self):
+        provider = self._anthropic_with_response()
+        r1 = ReviewResult(items=[], summary="first take")
+        r2 = ReviewResult(items=[], summary="second take")
+
+        merged = await provider.reconcile([r1, r2])
+        assert merged.summary == "looks good overall"
+        kwargs = provider.client.messages.create.call_args.kwargs
+        assert "judge" in kwargs["system"]
+        content = kwargs["messages"][0]["content"]
+        assert "first take" in content
+        assert "second take" in content
+
+    @pytest.mark.asyncio
+    async def test_openai_reconcile_sends_both_reviews_to_judge(self):
+        provider = OpenAIProvider(api_key="sk-test-123")
+        mock_message = MagicMock()
+        mock_message.content = json.dumps(SAMPLE_REVIEW)
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        provider.client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        r1 = ReviewResult(items=[], summary="first take")
+        r2 = ReviewResult(items=[], summary="second take")
+
+        merged = await provider.reconcile([r1, r2])
+        assert merged.summary == "looks good overall"
+        kwargs = provider.client.chat.completions.create.call_args.kwargs
+        assert "judge" in kwargs["messages"][0]["content"]
+        assert "first take" in kwargs["messages"][1]["content"]
+        assert "second take" in kwargs["messages"][1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_base_provider_cannot_judge(self):
+        class Bare(LLMProvider):
+            async def review(self, diff):
+                return ReviewResult(items=[], summary="")
+
+            async def count_tokens(self, text):
+                return 0
+
+        with pytest.raises(NotImplementedError):
+            await Bare().reconcile([ReviewResult(items=[], summary="")])
 
 
 class TestSchemaContract:
