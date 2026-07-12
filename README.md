@@ -3,7 +3,7 @@
 [![tests](https://github.com/timurmamedov1/PRRev/actions/workflows/tests.yml/badge.svg)](https://github.com/timurmamedov1/PRRev/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/prrev)](https://pypi.org/project/prrev/)
 
-A CLI tool that reviews code diffs using LLMs. Point it at a local repo or a GitHub PR URL. It sends the diff to Claude or GPT-4o and outputs a structured review with severity ratings, file references, and line numbers.
+A CLI tool that reviews code diffs using LLMs. Point it at a local repo or a GitHub PR URL. It sends the diff to Claude or GPT and outputs a structured review with severity ratings, file references, and line numbers.
 
 ## Install
 
@@ -40,8 +40,14 @@ prrev . --output review.md
 # fail in CI if there are warnings or worse
 prrev . --fail-on warning
 
+# review with both providers and reconcile the findings
+prrev . --provider both
+
 # show full tracebacks instead of short errors
 prrev . --debug
+
+# print the version
+prrev --version
 ```
 
 Note: brand new files don't appear in the diff until you `git add` them. PRRev will tell you when untracked files are being left out.
@@ -87,7 +93,7 @@ Precedence: CLI flags > env vars > repo config > global config > defaults.
 # use claude (default)
 prrev . --provider anthropic
 
-# use gpt-4o
+# use openai
 prrev . --provider openai
 
 # override the model
@@ -157,5 +163,5 @@ Tool notices (a file skipped for size, a failed chunk) render as warnings but ne
 - **GitPython:** local diff extraction
 - **httpx:** GitHub API (fetch PR diffs, post inline comments)
 - **Anthropic SDK:** Claude API with tool use for structured output
-- **OpenAI SDK:** GPT-4o API with structured output
+- **OpenAI SDK:** GPT API with structured output
 - **tiktoken:** token counting for OpenAI
