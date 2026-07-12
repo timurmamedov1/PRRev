@@ -61,7 +61,9 @@ Or use a config file at `~/.config/prrev/config.toml`:
 ```toml
 [llm]
 provider = "anthropic"
-model = "claude-haiku-4-5"
+model = "claude-haiku-4-5"          # used in single-provider mode
+anthropic_model = "claude-opus-4-8" # per-provider, used in ensemble mode
+openai_model = "gpt-4o-mini"
 anthropic_api_key = "YOUR_ANTHROPIC_KEY"
 
 [github]
@@ -71,9 +73,13 @@ token = "YOUR_GITHUB_TOKEN"
 max_items = 20
 ```
 
+`model` is the single-provider default. For ensemble mode (`provider = "both"`), set `anthropic_model` and `openai_model` instead, `model` doesn't apply there.
+
 You can also put a `.prrev.toml` in your repo root for per-project settings. API keys are ignored in repo config for security. They only load from env vars or the global config.
 
 Precedence: CLI flags > env vars > repo config > global config > defaults.
+
+`--post` needs a `GITHUB_TOKEN` that can write PR comments: a fine-grained personal access token (PAT) with **Pull requests: write**, or a classic PAT with the `repo` scope. A read-only token can fetch and review a PR but not post comments.
 
 ## Providers
 
