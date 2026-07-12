@@ -69,7 +69,7 @@ Or use a config file at `~/.config/prrev/config.toml`:
 provider = "anthropic"
 model = "claude-haiku-4-5"          # used in single-provider mode
 anthropic_model = "claude-opus-4-8" # per-provider, used in ensemble mode
-openai_model = "gpt-4o-mini"
+openai_model = "gpt-5.4-mini"
 anthropic_api_key = "YOUR_ANTHROPIC_KEY"
 
 [github]
@@ -117,13 +117,14 @@ prrev . --provider anthropic --model claude-opus-4-8
 
 | Model | ID |
 |---|---|
-| GPT-4o | `gpt-4o` (default) |
-| GPT-4o mini | `gpt-4o-mini` |
-| GPT-4 Turbo | `gpt-4-turbo` |
-| o1 | `o1` * |
-| o1-mini | `o1-mini` * |
+| GPT-5.6 Sol | `gpt-5.6-sol` (most capable) |
+| GPT-5.6 Terra | `gpt-5.6-terra` (default, balanced) |
+| GPT-5.6 Luna | `gpt-5.6-luna` (cheaper) |
+| GPT-5.5 | `gpt-5.5` |
+| GPT-5.4 mini | `gpt-5.4-mini` |
+| GPT-5.4 nano | `gpt-5.4-nano` |
 
-\* o1 models don't support structured output (`response_format`). Reviews may fail or return unparseable responses.
+Older models like `gpt-4o` still work but are deprecated by OpenAI.
 
 ### Ensemble mode
 
@@ -137,7 +138,7 @@ prrev . --provider both
 prrev . --provider both --judge openai
 
 # choose each provider's model
-prrev . --provider both --model anthropic=claude-haiku-4-5 --model openai=gpt-4o-mini
+prrev . --provider both --model anthropic=claude-haiku-4-5 --model openai=gpt-5.4-mini
 ```
 
 Findings flagged by both models are marked as higher confidence. If one provider fails, the review degrades to a single-model review with a notice instead of failing. Ensemble mode needs both API keys set and costs roughly double a single review, plus one reconciliation call per chunk.
