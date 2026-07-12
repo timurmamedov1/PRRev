@@ -117,7 +117,7 @@ prrev . --provider anthropic --model claude-opus-4-8
 
 The diff is sent to the LLM using each provider's structured output mechanism: Anthropic's tool use and OpenAI's `response_format` with a JSON schema. This guarantees the response matches the expected structure at the API level without fragile JSON text parsing.
 
-For large diffs, PRRev automatically chunks by file based on actual token counts (not character estimates) and reviews each chunk in parallel. Results are merged and truncated by severity: suggestions are dropped first, then warnings. Critical issues are never dropped.
+For large diffs, PRRev automatically chunks by file based on actual token counts (not character estimates) and reviews each chunk in parallel. A single file too large for the context window is split further into hunk batches, so even oversized files get reviewed. Results are merged and truncated by severity: suggestions are dropped first, then warnings. Critical issues are never dropped.
 
 ## Exit Codes
 
