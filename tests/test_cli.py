@@ -43,6 +43,20 @@ def _mock_config(**overrides):
     return MagicMock(**defaults)
 
 
+class TestVersion:
+    def test_version_flag(self):
+        from prrev import __version__
+
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == 0
+        assert __version__ in result.output
+
+    def test_version_needs_no_target(self):
+        # --version is eager, so it works without the required target arg
+        result = runner.invoke(app, ["--version"])
+        assert "Missing argument" not in result.output
+
+
 class TestLocalReview:
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)
     @patch("prrev.cli.get_diff", return_value="diff content")

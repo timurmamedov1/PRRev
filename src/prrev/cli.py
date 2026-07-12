@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from prrev import __version__
 from prrev.config import load_config
 from prrev.formatter import print_review, to_markdown
 from prrev.git import find_repo_root, get_diff
@@ -32,6 +33,13 @@ def _fail(message: str, *, debug: bool) -> None:
 
 def _is_github_url(target: str) -> bool:
     return target.startswith("https://github.com/") and "/pull/" in target
+
+
+def _version_callback(value: bool) -> None:
+    # eager so --version prints and exits before the required target arg
+    if value:
+        console.print(f"prrev {__version__}")
+        raise typer.Exit(0)
 
 
 # provider name -> (class, config field holding its api key)
@@ -165,6 +173,13 @@ def main(
         help="Exit 1 if issues at this severity or above",
     ),
     debug: bool = typer.Option(False, help="Show full tracebacks instead of short errors"),
+    version: bool = typer.Option(  # noqa: B008, how typer options work
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the version and exit",
+    ),
 ) -> None:
     # validate --fail-on early. tuple keeps the error message order stable
     valid_severities = ("critical", "warning", "suggestion")
