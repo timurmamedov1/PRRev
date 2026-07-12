@@ -119,16 +119,24 @@ async def review_diff(
     # diff is too big, split by file and review in parallel
     file_diffs = _split_by_file(diff)
 
-    # skip files that individually exceed the threshold, same byte-length
-    # shortcut so we dont call count_tokens for every small chunk.
-    # TODO: split oversized files by hunk instead of skipping them
+    # files that individually exceed the threshold get reviewed in hunk
+    # batches. same byte-length shortcut so we dont call count_tokens for
+    # every small chunk
     reviewable = []
+    partial_files = []  # (path, oversized hunk count)
     skipped_files = []
     for chunk in file_diffs:
-        if _byte_len(chunk) > threshold and (await provider.count_tokens(chunk)) > threshold:
-            skipped_files.append(_path_from_header(chunk.split("\n", 1)[0]))
-        else:
+        if _byte_len(chunk) <= threshold or (await provider.count_tokens(chunk)) <= threshold:
             reviewable.append(chunk)
+            continue
+        path = _path_from_header(chunk.split("\n", 1)[0])
+        header, hunks = _split_file_chunk(chunk)
+        batches, skipped_hunks = _batch_hunks(header, hunks, threshold)
+        reviewable.extend(batches)
+        if not batches:
+            skipped_files.append(path)
+        elif skipped_hunks:
+            partial_files.append((path, skipped_hunks))
 
     # review chunks in parallel. one chunk failing shouldnt sink the others,
     # so failures are collected and surfaced as warnings on the merged result
@@ -164,6 +172,20 @@ async def review_diff(
                 line=None,
                 summary="file not reviewed, provider call failed",
                 explanation=f"reviewing this files diff failed: {exc}",
+                notice=True,
+            )
+        )
+
+    for path, skipped_hunks in partial_files:
+        merged.items.append(
+            ReviewItem(
+                severity="warning",
+                file=path,
+                line=None,
+                summary=f"partially reviewed, {skipped_hunks} oversized hunk(s) skipped",
+                explanation=(
+                    "some hunks exceeded the models token limit on their own and were not reviewed."
+                ),
                 notice=True,
             )
         )

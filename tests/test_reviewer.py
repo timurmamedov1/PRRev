@@ -276,13 +276,36 @@ class TestChunkedReview:
         assert skipped[0].notice is True
 
     async def test_single_oversized_file_skipped(self):
-        # a lone file over the threshold gets the skip warning, not an api call
+        # a hunkless oversized diff cant be split further, so it still gets
+        # the skip warning instead of an api call
         big = "diff --git a/big.py b/big.py\n" + "+pad\n" * 40
         provider = FakeProvider(max_tokens=100, count_by_length=True)
         result = await review_diff(provider, big)
         assert provider.review_calls == 0
         assert len(result.items) == 1
         assert "skipped" in result.items[0].summary
+
+    async def test_oversized_file_reviewed_in_hunk_batches(self):
+        # a file too big as a whole gets reviewed hunk batch by hunk batch
+        header = "diff --git a/big.py b/big.py\n--- a/big.py\n+++ b/big.py\n"
+        hunk = "@@ -1,2 +1,3 @@\n+line\n"
+        provider = FakeProvider(max_tokens=100, count_by_length=True)
+        result = await review_diff(provider, header + hunk * 3)
+        assert provider.review_calls == 3
+        assert not any(i.notice for i in result.items)
+
+    async def test_oversized_hunk_partially_skipped(self):
+        # one impossible hunk doesnt stop the rest of the file being reviewed
+        header = "diff --git a/big.py b/big.py\n--- a/big.py\n+++ b/big.py\n"
+        small = "@@ -1,2 +1,3 @@\n+line\n"
+        big = "@@ -50,2 +50,41 @@\n" + "+pad\n" * 40
+        provider = FakeProvider(max_tokens=100, count_by_length=True)
+        result = await review_diff(provider, header + small + big)
+        assert provider.review_calls == 1
+        partial = [i for i in result.items if "partially reviewed" in i.summary]
+        assert len(partial) == 1
+        assert partial[0].file == "big.py"
+        assert partial[0].notice is True
 
     async def test_concurrency_is_capped(self):
         diff = "".join(f"diff --git a/f{i}.py b/f{i}.py\n+line\n" for i in range(12))
