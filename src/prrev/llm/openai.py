@@ -89,9 +89,9 @@ SYSTEM_PROMPT = (
 
 
 class OpenAIProvider(LLMProvider):
-    max_input_tokens = 110_000  # gpt-4o is 128k, leave room for output
+    max_input_tokens = 110_000  # conservative floor across supported models
 
-    def __init__(self, model: str = "gpt-4o", api_key: str | None = None):
+    def __init__(self, model: str = "gpt-5.6-terra", api_key: str | None = None):
         self.model = model
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:

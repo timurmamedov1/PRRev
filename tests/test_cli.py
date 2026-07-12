@@ -340,7 +340,7 @@ class TestEnsembleCli:
         llm = mock_review.call_args.args[0]
         by_type = {type(p).__name__: p.model for p in llm.providers}
         assert by_type["AnthropicProvider"] == "claude-haiku-4-5"
-        assert by_type["OpenAIProvider"] == "gpt-4o"
+        assert by_type["OpenAIProvider"] == "gpt-5.6-terra"
 
     @patch("prrev.cli.load_config")
     def test_unknown_provider_in_model_pair(self, mock_config):
@@ -416,7 +416,7 @@ class TestEnsembleCli:
         # members kept their own defaults, generic model did not leak
         by_type = {type(p).__name__: p.model for p in llm.providers}
         assert by_type["AnthropicProvider"] == "claude-sonnet-5"
-        assert by_type["OpenAIProvider"] == "gpt-4o"
+        assert by_type["OpenAIProvider"] == "gpt-5.6-terra"
 
     @patch("prrev.cli.load_config")
     def test_duplicate_bare_model_rejected(self, mock_config):
