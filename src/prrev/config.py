@@ -19,7 +19,9 @@ REPO_CONFIG_NAME = ".prrev.toml"
 @dataclass
 class Config:
     provider: str = "anthropic"
-    model: str | None = None
+    model: str | None = None  # generic, single-provider mode
+    anthropic_model: str | None = None  # per-provider, used in ensemble mode
+    openai_model: str | None = None
     github_token: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
@@ -76,6 +78,11 @@ def _apply_toml(cfg: Config, data: dict, *, allow_tokens: bool) -> None:
         cfg.provider = v
     if (v := llm.get("model")) is not None:
         cfg.model = v
+    # per-provider models, not secret so repo config can set them too
+    if (v := llm.get("anthropic_model")) is not None:
+        cfg.anthropic_model = v
+    if (v := llm.get("openai_model")) is not None:
+        cfg.openai_model = v
 
     review = data.get("review", {})
     if (v := review.get("max_items")) is not None:

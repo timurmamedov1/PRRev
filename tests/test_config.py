@@ -45,6 +45,17 @@ class TestDefaults:
         assert cfg.anthropic_api_key is None
         assert cfg.openai_api_key is None
 
+    def test_default_per_provider_models_are_none(self):
+        cfg = Config()
+        assert cfg.anthropic_model is None
+        assert cfg.openai_model is None
+
+    def test_per_provider_models_load_from_repo_config(self, tmp_path):
+        # not secret, so repo config can set them (unlike tokens)
+        (tmp_path / ".prrev.toml").write_text('[llm]\nanthropic_model = "claude-haiku-4-5"\n')
+        cfg = load_config(repo_path=str(tmp_path))
+        assert cfg.anthropic_model == "claude-haiku-4-5"
+
 
 class TestApplyToml:
     def test_sets_provider(self):
@@ -61,6 +72,16 @@ class TestApplyToml:
         cfg = Config()
         _apply_toml(cfg, {"review": {"max_items": 5}}, allow_tokens=False)
         assert cfg.max_items == 5
+
+    def test_sets_per_provider_models(self):
+        cfg = Config()
+        _apply_toml(
+            cfg,
+            {"llm": {"anthropic_model": "claude-haiku-4-5", "openai_model": "gpt-4o-mini"}},
+            allow_tokens=False,
+        )
+        assert cfg.anthropic_model == "claude-haiku-4-5"
+        assert cfg.openai_model == "gpt-4o-mini"
 
     def test_tokens_allowed(self):
         cfg = Config()
