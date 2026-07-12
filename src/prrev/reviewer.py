@@ -29,6 +29,55 @@ def _byte_len(text: str) -> int:
     return len(text.encode("utf-8"))
 
 
+def _split_file_chunk(chunk: str) -> tuple[str, list[str]]:
+    # split a single-file diff into its header block (diff --git, index,
+    # ---/+++ lines) and its @@ hunks
+    header_lines: list[str] = []
+    hunks: list[str] = []
+    current: list[str] | None = None
+
+    for line in chunk.splitlines(keepends=True):
+        if line.startswith("@@"):
+            if current is not None:
+                hunks.append("".join(current))
+            current = [line]
+        elif current is None:
+            header_lines.append(line)
+        else:
+            current.append(line)
+    if current is not None:
+        hunks.append("".join(current))
+
+    return "".join(header_lines), hunks
+
+
+def _batch_hunks(header: str, hunks: list[str], threshold: int) -> tuple[list[str], int]:
+    # greedily pack hunks into standalone diffs under the byte threshold,
+    # re-attaching the header so each batch parses as a complete file diff.
+    # bytes upper-bound tokens, so a byte-packed batch always fits the model.
+    # hunks too big even on their own are counted as skipped
+    batches: list[str] = []
+    current: list[str] = []
+    current_size = _byte_len(header)
+    skipped = 0
+
+    for hunk in hunks:
+        hunk_size = _byte_len(hunk)
+        if _byte_len(header) + hunk_size > threshold:
+            skipped += 1
+            continue
+        if current and current_size + hunk_size > threshold:
+            batches.append(header + "".join(current))
+            current = []
+            current_size = _byte_len(header)
+        current.append(hunk)
+        current_size += hunk_size
+    if current:
+        batches.append(header + "".join(current))
+
+    return batches, skipped
+
+
 def _split_by_file(diff: str) -> list[str]:
     chunks = []
     current: list[str] = []

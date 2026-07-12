@@ -5,7 +5,14 @@ import asyncio
 import pytest
 
 from prrev.llm.base import LLMProvider, ReviewItem, ReviewResult
-from prrev.reviewer import _merge_results, _path_from_header, _truncate, review_diff
+from prrev.reviewer import (
+    _batch_hunks,
+    _merge_results,
+    _path_from_header,
+    _split_file_chunk,
+    _truncate,
+    review_diff,
+)
 
 
 class FakeProvider(LLMProvider):
@@ -169,6 +176,61 @@ class TestReviewDiff:
         big_diff = "diff --git a/x b/x\n" + "+padding line\n" * 100
         await review_diff(provider, big_diff)
         assert provider.count_tokens_calls >= 1
+
+
+def _two_hunk_chunk():
+    return (
+        "diff --git a/app.py b/app.py\n"
+        "--- a/app.py\n"
+        "+++ b/app.py\n"
+        "@@ -1,3 +1,4 @@\n"
+        " one\n"
+        "+two\n"
+        "@@ -10,2 +11,3 @@\n"
+        " ten\n"
+        "+eleven\n"
+    )
+
+
+class TestHunkSplitting:
+    def test_splits_header_and_hunks(self):
+        header, hunks = _split_file_chunk(_two_hunk_chunk())
+        assert header.startswith("diff --git")
+        assert header.endswith("+++ b/app.py\n")
+        assert len(hunks) == 2
+        assert hunks[0].startswith("@@ -1,3")
+        assert hunks[1].startswith("@@ -10,2")
+
+    def test_chunk_without_hunks_is_all_header(self):
+        chunk = "diff --git a/x b/x\nsimilarity index 100%\n"
+        header, hunks = _split_file_chunk(chunk)
+        assert header == chunk
+        assert hunks == []
+
+    def test_batches_reattach_header_and_stay_under_threshold(self):
+        header, hunks = _split_file_chunk(_two_hunk_chunk())
+        # threshold fits the header plus one hunk, not both
+        threshold = len(header) + max(len(h) for h in hunks)
+        batches, skipped = _batch_hunks(header, hunks, threshold)
+        assert skipped == 0
+        assert len(batches) == 2
+        for batch, hunk in zip(batches, hunks, strict=True):
+            assert batch == header + hunk
+            assert len(batch) <= threshold
+
+    def test_small_hunks_share_a_batch(self):
+        header, hunks = _split_file_chunk(_two_hunk_chunk())
+        batches, skipped = _batch_hunks(header, hunks, threshold=10_000)
+        assert skipped == 0
+        assert batches == [header + hunks[0] + hunks[1]]
+
+    def test_oversized_hunk_counts_as_skipped(self):
+        header, hunks = _split_file_chunk(_two_hunk_chunk())
+        big_hunk = "@@ -100,2 +100,60 @@\n" + "+pad\n" * 60
+        threshold = len(header) + len(big_hunk) - 1
+        batches, skipped = _batch_hunks(header, hunks + [big_hunk], threshold)
+        assert skipped == 1
+        assert all(big_hunk not in b for b in batches)
 
 
 class TestPathFromHeader:
