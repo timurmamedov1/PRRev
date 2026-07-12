@@ -36,6 +36,13 @@ class TestToMarkdown:
         md = to_markdown(result)
         assert "No issues found." in md
 
+    def test_empty_notice_suppressed(self):
+        # posting path suppresses the notice when findings went inline
+        result = ReviewResult(items=[], summary="found a bug on line 7")
+        md = to_markdown(result, show_empty_notice=False)
+        assert "No issues found." not in md
+        assert "found a bug on line 7" in md
+
     def test_item_severity_label(self):
         result = ReviewResult(items=[_item("critical")], summary="bad")
         md = to_markdown(result)

@@ -420,6 +420,7 @@ class TestGitHubUrl:
         body = mock_post.call_args.args[3]
         assert "general finding" in body
         assert "inline finding" not in body
+        assert "No issues found." not in body
         assert len(mock_post.call_args.kwargs["items"]) == 2
 
     @patch("prrev.cli.review_diff", new_callable=AsyncMock)

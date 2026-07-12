@@ -121,7 +121,11 @@ async def _run(
         # located items become inline comments, so the body only carries the
         # summary plus items that cant be placed on a line
         body_items = [i for i in result.items if not (i.file and i.line)]
-        body = to_markdown(ReviewResult(items=body_items, summary=result.summary))
+        has_inline = len(body_items) < len(result.items)
+        body = to_markdown(
+            ReviewResult(items=body_items, summary=result.summary),
+            show_empty_notice=not has_inline,
+        )
         await post_review(
             owner,
             repo,

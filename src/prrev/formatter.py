@@ -54,11 +54,14 @@ def print_review(result: ReviewResult, file_count: int = 0) -> None:
     console.print(Panel(Text(result.summary), title="Summary", border_style="dim"))
 
 
-def to_markdown(result: ReviewResult) -> str:
+def to_markdown(result: ReviewResult, show_empty_notice: bool = True) -> str:
+    # show_empty_notice off when findings went to inline comments, so the
+    # posted body doesnt claim "no issues" above a summary describing one
     lines = ["# PRRev Code Review\n"]
 
     if not result.items:
-        lines.append("No issues found.\n")
+        if show_empty_notice:
+            lines.append("No issues found.\n")
     else:
         for item in result.items:
             _, label = SEVERITY_STYLES.get(item.severity, ("white", item.severity.upper()))
