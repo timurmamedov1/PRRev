@@ -13,6 +13,7 @@ from prrev.git import find_repo_root, get_diff
 from prrev.github import fetch_pr, parse_pr_url, post_review
 from prrev.llm.anthropic import AnthropicProvider
 from prrev.llm.base import ReviewResult
+from prrev.llm.ensemble import EnsembleProvider
 from prrev.llm.openai import OpenAIProvider
 from prrev.reviewer import review_diff
 
@@ -48,6 +49,37 @@ def _make_provider(name: str, model: str | None, cfg):
     if model:
         kwargs["model"] = model
     return cls(**kwargs)
+
+
+def _make_ensemble(models: dict[str, str], cfg, judge: str | None):
+    # every provider reviews (on its own model), one of them reconciles
+    members = {p: _make_provider(p, models.get(p), cfg) for p in ("anthropic", "openai")}
+    judge_name = judge or "anthropic"
+    if judge_name not in members:
+        raise ValueError(f"unknown judge: {judge_name}")
+    return EnsembleProvider(list(members.values()), judge=members[judge_name])
+
+
+def _parse_models(values: list[str]) -> tuple[str | None, dict[str, str]]:
+    # --model takes a bare name for a single provider, or repeated
+    # provider=model pairs for the ensemble
+    bare = None
+    per_provider: dict[str, str] = {}
+    for value in values:
+        if "=" in value:
+            name, _, model = value.partition("=")
+            if name not in PROVIDERS:
+                raise ValueError(f"unknown provider in --model: {name}")
+            if not model:
+                raise ValueError(f"empty model in --model: {value}")
+            per_provider[name] = model
+        elif bare is not None:
+            raise ValueError("pass --model once, or use provider=model pairs")
+        else:
+            bare = value
+    if bare and per_provider:
+        raise ValueError("dont mix bare and provider=model --model values")
+    return bare, per_provider
 
 
 async def _run(
@@ -113,8 +145,15 @@ def main(
         help="Review a commit range (abc..def)",
     ),
     staged: bool = typer.Option(False, help="Review only staged changes"),
-    provider: str | None = typer.Option(None, help="LLM provider: anthropic or openai"),
-    model: str | None = typer.Option(None, help="Model override"),
+    provider: str | None = typer.Option(None, help="LLM provider: anthropic, openai, or both"),
+    model: list[str] | None = typer.Option(  # noqa: B008, how typer options work
+        None,
+        help="Model override, or repeated provider=model pairs with --provider both",
+    ),
+    judge: str | None = typer.Option(
+        None,
+        help="Which provider reconciles when --provider both (default anthropic)",
+    ),
     post: bool = typer.Option(False, help="Post review as GitHub PR comment"),
     output: str | None = typer.Option(None, help="Write review to markdown file"),
     fail_on: str | None = typer.Option(
@@ -158,11 +197,36 @@ def main(
         # also covers TOMLDecodeError from a malformed config file
         _fail(f"error: invalid config: {e}", debug=debug)
     prov = provider or cfg.provider
-    mdl = model or cfg.model
+
+    if judge and prov != "both":
+        console.print("error: --judge only applies to --provider both", style="red")
+        raise typer.Exit(2)
+
+    try:
+        bare_model, model_map = _parse_models(model or [])
+    except ValueError as e:
+        _fail(f"error: {e}", debug=debug)
+    if prov == "both" and bare_model:
+        console.print(
+            "error: --model needs provider=model pairs with --provider both "
+            "(e.g. --model anthropic=claude-haiku-4-5)",
+            style="red",
+        )
+        raise typer.Exit(2)
+    if prov != "both" and model_map:
+        console.print("error: provider=model pairs only apply to --provider both", style="red")
+        raise typer.Exit(2)
+    if bare_model is None and not model_map and cfg.model:
+        # config carries a single-provider model, ensemble members keep
+        # their own defaults
+        bare_model = cfg.model
 
     # pick provider
     try:
-        llm = _make_provider(prov, mdl, cfg)
+        if prov == "both":
+            llm = _make_ensemble(model_map, cfg, judge)
+        else:
+            llm = _make_provider(prov, bare_model, cfg)
     except ValueError as e:
         _fail(f"error: {e}", debug=debug)
 

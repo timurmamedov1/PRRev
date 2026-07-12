@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typer.testing import CliRunner
 
 from prrev.cli import app
+from prrev.llm.anthropic import AnthropicProvider
 from prrev.llm.base import ReviewItem, ReviewResult
+from prrev.llm.ensemble import EnsembleProvider
+from prrev.llm.openai import OpenAIProvider
 
 runner = CliRunner()
 
@@ -234,6 +237,114 @@ class TestProviderRouting:
         result = runner.invoke(app, ["."])
         assert result.exit_code == 2
         assert "error: unknown provider: gemini" in result.output
+
+
+class TestEnsembleCli:
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_provider_both_builds_ensemble(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, [".", "--provider", "both"])
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        assert isinstance(llm, EnsembleProvider)
+        assert isinstance(llm.judge, AnthropicProvider)
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_judge_flag_picks_the_reconciler(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(app, [".", "--provider", "both", "--judge", "openai"])
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        assert isinstance(llm.judge, OpenAIProvider)
+
+    @patch("prrev.cli.load_config")
+    def test_judge_without_both_rejected(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--judge", "openai"])
+        assert result.exit_code == 2
+        assert "--judge only applies" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_bare_model_with_both_rejected(self, mock_config):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        result = runner.invoke(app, [".", "--provider", "both", "--model", "gpt-4o"])
+        assert result.exit_code == 2
+        assert "provider=model pairs" in result.output
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_per_provider_models(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(
+            app,
+            [
+                ".",
+                "--provider",
+                "both",
+                "--model",
+                "anthropic=claude-haiku-4-5",
+                "--model",
+                "openai=gpt-4o-mini",
+            ],
+        )
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        by_type = {type(p).__name__: p.model for p in llm.providers}
+        assert by_type["AnthropicProvider"] == "claude-haiku-4-5"
+        assert by_type["OpenAIProvider"] == "gpt-4o-mini"
+
+    @patch("prrev.cli.review_diff", new_callable=AsyncMock)
+    @patch("prrev.cli.get_diff", return_value="diff content")
+    @patch("prrev.cli.load_config")
+    def test_partial_model_pair_keeps_other_default(self, mock_config, mock_diff, mock_review):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        mock_review.return_value = _mock_review_result()
+        result = runner.invoke(
+            app, [".", "--provider", "both", "--model", "anthropic=claude-haiku-4-5"]
+        )
+        assert result.exit_code == 0
+        llm = mock_review.call_args.args[0]
+        by_type = {type(p).__name__: p.model for p in llm.providers}
+        assert by_type["AnthropicProvider"] == "claude-haiku-4-5"
+        assert by_type["OpenAIProvider"] == "gpt-4o"
+
+    @patch("prrev.cli.load_config")
+    def test_unknown_provider_in_model_pair(self, mock_config):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        result = runner.invoke(app, [".", "--provider", "both", "--model", "gemini=x"])
+        assert result.exit_code == 2
+        assert "unknown provider in --model" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_model_pairs_rejected_for_single_provider(self, mock_config):
+        mock_config.return_value = _mock_config()
+        result = runner.invoke(app, [".", "--model", "anthropic=claude-haiku-4-5"])
+        assert result.exit_code == 2
+        assert "only apply to --provider both" in result.output
+
+    @patch("prrev.cli.load_config")
+    def test_unknown_judge_rejected(self, mock_config):
+        mock_config.return_value = _mock_config(openai_api_key="sk-oai")
+        result = runner.invoke(app, [".", "--provider", "both", "--judge", "gemini"])
+        assert result.exit_code == 2
+        assert "unknown judge" in result.output
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("prrev.cli.load_config")
+    def test_both_needs_both_keys(self, mock_config):
+        # env cleared so the providers real key fallback cant mask the error
+        mock_config.return_value = _mock_config(openai_api_key=None)
+        result = runner.invoke(app, [".", "--provider", "both"])
+        assert result.exit_code == 2
+        assert "OPENAI_API_KEY" in result.output
 
 
 class TestGitHubUrl:
