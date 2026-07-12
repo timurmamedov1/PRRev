@@ -4,7 +4,12 @@ dynamic = ["version"]
 description = "A CLI tool that reviews code diffs using LLMs."
 readme = "README.md"
 license = "MIT"
-authors = [{ name = "Timur Mamedov", email = "tm412421@gmail.com" }]
+# name-only entry fills the Author metadata field, the name+email pair
+# fills Author-email. both are needed or Author shows up empty
+authors = [
+    { name = "Timur Mamedov" },
+    { name = "Timur Mamedov", email = "timurmamedov742@gmail.com" },
+]
 requires-python = ">=3.10"
 dependencies = [
     "typer>=0.12",
